@@ -19,15 +19,8 @@ class AdminUserRepository:
         await self.session.refresh(admin)
         return admin
 
-    async def ensure_admin(self, tg_id: int, username: str | None) -> AdminUser:
-        admin = await self.get_by_tg_id(tg_id)
-        if admin:
-            if username and admin.username != username:
-                admin.username = username
-                await self.session.commit()
-                await self.session.refresh(admin)
-            return admin
-        return await self.create_admin(tg_id, username)
+    async def ensure_admin(self, tg_id: int) -> AdminUser | None:
+        return await self.get_by_tg_id(tg_id)
 
     async def increase_balance(self, tg_id: int, amount: int) -> int:
         stmt = (
@@ -41,3 +34,4 @@ class AdminUserRepository:
         await self.session.commit()
         await self.session.refresh(admin)
         return admin.balance
+

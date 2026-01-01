@@ -1,23 +1,22 @@
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
-
 from .logger_config import logger
 
+
 class Settings(BaseSettings):
-    BOT_TOKEN: str
+    DROP_BOT_TOKEN: str
+
+    ORDERS_GROUP_ID: int
+    ADMIN_IDS: list[int]
+    OPERATOR_REWARD_RUB: int = 50
+
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
     POSTGRES_HOST: str
     POSTGRES_PORT: int
-    LAVA_SHOP_ID: str
-    LAVA_SECRET_KEY: str
-    SECRET_KEY: str
-    ADMIN_IDS: list[int]
-    PALLY_API_TOKEN: str
-    PALLY_SHOP_ID: str
-    ORDERS_GROUP_ID: int
-    REVIEWS_CHANNEL_ID: int
+
+    JWT_SECRET: str
 
     @field_validator("ADMIN_IDS", mode="before")
     def split_admin_ids(cls, v):
@@ -32,11 +31,11 @@ class Settings(BaseSettings):
 
     @property
     def POSTGRES_ASYNC_URL(self) -> str:
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-    
-    @property
-    def POSTGRES_SYNC_URL(self) -> str:
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        return (
+            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
+
 
 try:
     settings = Settings()

@@ -1,35 +1,49 @@
-import aiohttp
-from ..core.loader import settings
 from collections import OrderedDict
+import aiohttp
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.repositories.payment_config_repo import PaymentConfigRepository
+
 
 PALLY_API_URL_CREATE = "https://pal24.pro/api/v1/bill/create"
 PALLY_API_URL_STATUS = "https://pal24.pro/api/v1/bill/status"
 
-PALLY_SHOP_ID = settings.PALLY_SHOP_ID
-PALLY_API_TOKEN = settings.PALLY_API_TOKEN
-
-session: aiohttp.ClientSession | None = None
+_session: aiohttp.ClientSession | None = None
 
 
-async def get_session() -> aiohttp.ClientSession:
-    global session
-    if session is None or session.closed:
+async def _get_session() -> aiohttp.ClientSession:
+    global _session
+    if _session is None or _session.closed:
         timeout = aiohttp.ClientTimeout(total=20)
-        session = aiohttp.ClientSession(timeout=timeout)
-    return session
+        _session = aiohttp.ClientSession(timeout=timeout)
+    return _session
 
 
-async def create_invoice_PALLY(amount, order_id, description,
-                               success_url=None, fail_url=None, ttl=600):
+async def create_invoice_pally(
+    session: AsyncSession,
+    shop_id: int,
+    amount: float,
+    order_id: str,
+    description: str,
+    success_url: str | None = None,
+    fail_url: str | None = None,
+    ttl: int = 600,
+):
+
+    cfg = await PaymentConfigRepository(session).get(shop_id, "pally")
+    if not cfg or not cfg.api_token or not cfg.shop_id_value:
+        raise RuntimeError(f"PALLY config not set for shop_id={shop_id}")
+
     data = OrderedDict([
         ("amount", round(float(amount), 2)),
-        ("shop_id", PALLY_SHOP_ID),
+        ("shop_id", cfg.shop_id_value),
         ("order_id", str(order_id)),
         ("description", description),
         ("type", "normal"),
         ("currency_in", "RUB"),
-        ("name", "SHOPCHEK"),
-        ("ttl", ttl)
+        ("name", "SHOPCHECK"),
+        ("ttl", ttl),
     ])
 
     if success_url:
@@ -38,23 +52,34 @@ async def create_invoice_PALLY(amount, order_id, description,
         data["fail_url"] = fail_url
 
     headers = {
-        "Authorization": f"Bearer {PALLY_API_TOKEN}",
+        "Authorization": f"Bearer {cfg.api_token}",
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Accept": "application/json",
     }
 
-    session = await get_session()
-    async with session.post(PALLY_API_URL_CREATE, json=data, headers=headers) as resp:
+    http = await _get_session()
+    async with http.post(PALLY_API_URL_CREATE, json=data, headers=headers) as resp:
         return await resp.json()
 
 
-async def get_invoice_status_PALLY(bill_id: str):
+async def get_invoice_status_pally(
+    session: AsyncSession,
+    shop_id: int,
+    bill_id: str,
+):
+    cfg = await PaymentConfigRepository(session).get(shop_id, "pally")
+    if not cfg or not cfg.api_token:
+        raise RuntimeError(f"PALLY config not set for shop_id={shop_id}")
+
     headers = {
-        "Authorization": f"Bearer {PALLY_API_TOKEN}",
+        "Authorization": f"Bearer {cfg.api_token}",
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Accept": "application/json",
     }
 
-    session = await get_session()
-    async with session.get(f"{PALLY_API_URL_STATUS}?id={bill_id}", headers=headers) as resp:
+    http = await _get_session()
+    async with http.get(
+        f"{PALLY_API_URL_STATUS}?id={bill_id}",
+        headers=headers,
+    ) as resp:
         return await resp.json()

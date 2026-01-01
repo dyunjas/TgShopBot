@@ -1,29 +1,35 @@
 import json
 import hmac
 import hashlib
-import aiohttp
-from ..core.loader import settings
-import requests
+import asyncio
 from collections import OrderedDict
-import asyncio 
+import requests
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.repositories.payment_config_repo import PaymentConfigRepository
+
 
 LAVA_API_URL = "https://api.lava.ru/business/invoice/create"
 LAVA_API_URL_STATUS = "https://api.lava.ru/business/invoice/status"
 
-SHOP_ID = settings.LAVA_SHOP_ID
-SECRET_KEY = settings.LAVA_SECRET_KEY
 
-session: aiohttp.ClientSession | None = None
+async def create_invoice_lava(
+    session: AsyncSession,
+    shop_id: int,
+    amount: float,
+    order_id: str,
+    comment: str,
+    success_url: str,
+    fail_url: str,
+    hook_url: str,
+):
 
-async def get_session() -> aiohttp.ClientSession:
-    global session
-    if session is None or session.closed:
-        timeout = aiohttp.ClientTimeout(total=20)
-        session = aiohttp.ClientSession(timeout=timeout)
-    return session
+    cfg = await PaymentConfigRepository(session).get(shop_id, "lava")
+    if not cfg or not cfg.shop_id_value or not cfg.secret_key:
+        raise RuntimeError(f"LAVA config not set for shop_id={shop_id}")
 
-async def create_invoice_LAVA(amount, order_id, comment, success_url, fail_url, hook_url):
-    def create_invoice_sync():
+    def _sync():
         data = OrderedDict([
             ("comment", comment),
             ("customFields", str(order_id)),
@@ -32,46 +38,79 @@ async def create_invoice_LAVA(amount, order_id, comment, success_url, fail_url, 
             ("hookUrl", hook_url),
             ("includeService", ["sbp"]),
             ("orderId", order_id),
-            ("shopId", SHOP_ID),
+            ("shopId", cfg.shop_id_value),
             ("successUrl", success_url),
-            ("sum", round(float(amount), 2))
+            ("sum", round(float(amount), 2)),
         ])
+
         json_str = json.dumps(data, separators=(",", ":"))
-        signature = hmac.new(SECRET_KEY.encode(), json_str.encode(), hashlib.sha256).hexdigest()
+        signature = hmac.new(
+            cfg.secret_key.encode(),
+            json_str.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "Signature": signature
+            "Signature": signature,
         }
-        resp = requests.post(LAVA_API_URL, data=json_str, headers=headers, timeout=20)
+
+        resp = requests.post(
+            LAVA_API_URL,
+            data=json_str,
+            headers=headers,
+            timeout=20,
+        )
         return resp.json()
 
-    return await asyncio.to_thread(create_invoice_sync)
+    return await asyncio.to_thread(_sync)
 
-async def get_invoice_status_LAVA(order_id: str | None = None, invoice_id: str | None = None):
-    if order_id is None and invoice_id is None:
-        raise ValueError
-    
+
+async def get_invoice_status_lava(
+    session: AsyncSession,
+    shop_id: int,
+    order_id: str | None = None,
+    invoice_id: str | None = None,
+):
+    if not order_id and not invoice_id:
+        raise ValueError("order_id or invoice_id required")
+
+    cfg = await PaymentConfigRepository(session).get(shop_id, "lava")
+    if not cfg or not cfg.shop_id_value or not cfg.secret_key:
+        raise RuntimeError(f"LAVA config not set for shop_id={shop_id}")
+
     payload = OrderedDict()
-    payload["shopId"] = SHOP_ID
+    payload["shopId"] = cfg.shop_id_value
     if order_id:
         payload["orderId"] = str(order_id)
     if invoice_id:
         payload["invoiceId"] = str(invoice_id)
 
-    json_str = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
+    json_bytes = json.dumps(
+        payload,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
 
-    signature = hmac.new(SECRET_KEY.encode(), json_str, hashlib.sha256).hexdigest()
+    signature = hmac.new(
+        cfg.secret_key.encode(),
+        json_bytes,
+        hashlib.sha256,
+    ).hexdigest()
 
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json",
-        "Signature": signature
+        "Signature": signature,
     }
 
-    def sync_request():
-        return requests.post(LAVA_API_URL_STATUS, data=json_str, headers=headers, timeout=20).json()
+    def _sync():
+        return requests.post(
+            LAVA_API_URL_STATUS,
+            data=json_bytes,
+            headers=headers,
+            timeout=20,
+        ).json()
 
-    response = await asyncio.to_thread(sync_request)
-
-    return response
+    return await asyncio.to_thread(_sync)
