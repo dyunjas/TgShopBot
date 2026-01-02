@@ -31,9 +31,11 @@ def confirm_refund_kb(shop_id: int, order_id: str) -> InlineKeyboardMarkup:
     kb.adjust(1)
     return kb.as_markup()
 
-def rate_kb(order_id: str):
+
+def rate_kb(shop_id: int, order_id: str) -> InlineKeyboardMarkup:
+
     kb = InlineKeyboardBuilder()
     for i in range(5, 0, -1):
-        kb.button(text=("⭐" * i), callback_data=f"rate:{order_id}:{i}")
+        kb.button(text=("⭐" * i), callback_data=f"rate:{shop_id}:{order_id}:{i}")
     kb.adjust(1, 1, 1, 1, 1)
     return kb.as_markup()

@@ -14,13 +14,17 @@ router = Router()
 
 @router.callback_query(F.data.startswith("rate:"))
 async def rate_choose_clb(callback: CallbackQuery, state: FSMContext):
+
     try:
-        _, order_id, stars = callback.data.split(":")
+        _, shop_id_s, order_id, stars = callback.data.split(":")
+        shop_id = int(shop_id_s)
         stars_i = int(stars)
+        if stars_i < 1 or stars_i > 5:
+            raise ValueError("stars out of range")
     except Exception:
         return await callback.answer("Кнопка устарела", show_alert=True)
 
-    await state.update_data(order_id=order_id, stars=stars_i)
+    await state.update_data(shop_id=shop_id, order_id=order_id, stars=stars_i)
 
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
@@ -36,16 +40,16 @@ async def rate_choose_clb(callback: CallbackQuery, state: FSMContext):
 async def review_comment_msg(
     message: Message,
     state: FSMContext,
-    shop_id: int,
     order_repo: ShopOrderRepository,
     shop_repo: ShopRepository,
 ):
     data = await state.get_data()
+    shop_id = int(data.get("shop_id") or 0)
     order_id = data.get("order_id")
     stars = int(data.get("stars") or 0)
     comment = (message.text or "").strip()
 
-    if not order_id or not stars:
+    if not shop_id or not order_id or not stars:
         await state.clear()
         return await message.answer("Сессия отзыва истекла. Попробуйте ещё раз.")
 
@@ -64,7 +68,6 @@ async def review_comment_msg(
     display_name = (message.from_user.full_name or "").strip() if message.from_user else ""
     display_name = display_name or "Пользователь"
     item_title = (getattr(order, "title", None) or "").strip() or "—"
-
 
     review_text = (
         f"⭐ Оценка: <b>{stars}/5</b>\n"

@@ -11,13 +11,20 @@ PAGE_SHOP_MENU = "shop_menu"
 
 
 def _caption(page, fallback: str) -> str:
+
     if not page:
         return fallback
+
     title = (page.title or "").strip()
     body = (page.content or "").strip()
+
     if title and body:
         return f"<b>{title}</b>\n\n{body}"
-    return title or body or fallback
+    if body:
+        return body
+    if title:
+        return f"<b>{title}</b>"
+    return fallback
 
 
 @router.callback_query(F.data == "shop")

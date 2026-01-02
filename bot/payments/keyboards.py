@@ -8,11 +8,21 @@ def back_profile_kb():
     return builder.as_markup()
 
 
-def payment_choice_kb():
+def payment_choice_kb(*, show_pally: bool, show_lava: bool):
+
     builder = InlineKeyboardBuilder()
-    builder.button(text="СБП 1", callback_data="pay_pally")
-    builder.button(text="СБП 2", callback_data="pay_lava")
-    builder.adjust(1, 1)
+
+    if show_pally:
+        builder.button(text="СБП 1", callback_data="pay_pally")
+
+    if show_lava:
+        builder.button(text="СБП 2", callback_data="pay_lava")
+
+    if show_pally and show_lava:
+        builder.adjust(1, 1)
+    else:
+        builder.adjust(1)
+
     return builder.as_markup()
 
 

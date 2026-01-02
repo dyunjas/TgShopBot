@@ -96,7 +96,8 @@ class ShopPage(Base):
     shop: Mapped["Shop"] = relationship(back_populates="pages")
 
     page_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    title: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    title: Mapped[str | None] = mapped_column(String(64), nullable=True, default="") 
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
     image: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -341,7 +342,7 @@ class ShopPromocode(Base):
 
 
 class ShopPromocodeActivation(Base):
-    __tablename__ = "shop_promocode_usages"
+    __tablename__ = "shop_promocode_useges"
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
@@ -362,7 +363,7 @@ class ShopPromocodeActivation(Base):
     promocode: Mapped["ShopPromocode"] = relationship(back_populates="activations")
 
     __table_args__ = (
-        UniqueConstraint("shop_id", "promocode_id", "user_id", name="uq_promocode_user_shop"),
+        UniqueConstraint("shop_id", "promocode_id", "user_id", name="uq_shop_promocode_useges_shop_promo_user"),
     )
 
 

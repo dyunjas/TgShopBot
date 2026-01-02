@@ -223,7 +223,7 @@ async def order_done_confirm_clb(
                         f"Заказ <b>{order_id}</b> - <b>{order.title}</b> был выполнен.\n\n"
                         "Оставьте отзыв по кнопке ниже ❤️"
                     ),
-                    reply_markup=rate_kb(order.order_id),
+                    reply_markup=rate_kb(shop_id, order_id)
                 )
             except Exception as e:
                 logger.exception(

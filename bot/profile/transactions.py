@@ -11,14 +11,35 @@ PAGE_LIST = "transactions_menu"
 PAGE_ITEM = "transaction_item_menu"
 
 
-def _caption(page, fallback: str) -> str:
+def _format_template(tpl: str, values: dict[str, object]) -> str:
+    """Простой шаблонизатор для {key}. Не падает если ключа нет."""
+    if not tpl:
+        return ""
+    out = tpl
+    for k, v in values.items():
+        out = out.replace("{" + k + "}", str(v))
+    return out
+
+
+def _caption(page, fallback: str, values: dict[str, object] | None = None) -> str:
+    """
+    Возвращает caption из page.title/page.content.
+    Если title пустой — заголовок НЕ показываем вообще.
+    """
+    values = values or {}
+
     if not page:
-        return fallback
-    title = page.title or ""
-    body = page.content or ""
+        return _format_template(fallback, values)
+
+    title = ((page.title or "").strip())
+    body = ((page.content or "").strip())
+
+    title = _format_template(title, values)
+    body = _format_template(body, values)
+
     if title and body:
         return f"<b>{title}</b>\n\n{body}"
-    return title or body or fallback
+    return body or (f"<b>{title}</b>" if title else _format_template(fallback, values))
 
 
 @router.callback_query(F.data == "transaction_history")
@@ -32,7 +53,6 @@ async def transactions_clb(
     txs = await transaction_repo.get_transactions(shop_id=shop_id, tg_id=tg_id)
 
     page = await page_repo.get_page(shop_id=shop_id, page_type=PAGE_LIST)
-    caption = _caption(page, "Ваши транзакции:")
     image = page.image if page else None
 
     if not txs:
@@ -47,7 +67,9 @@ async def transactions_clb(
         await callback.answer()
         return
 
+    caption = _caption(page, "Ваши транзакции:")
     kb = build_transactions_kb(txs, page=0).as_markup()
+
     if image:
         await callback.message.edit_media(
             media=InputMediaPhoto(media=image, caption=caption, parse_mode="HTML"),
@@ -71,7 +93,6 @@ async def transactions_page_clb(
     txs = await transaction_repo.get_transactions(shop_id=shop_id, tg_id=tg_id)
 
     page = await page_repo.get_page(shop_id=shop_id, page_type=PAGE_LIST)
-    caption = _caption(page, "Ваши транзакции:")
     image = page.image if page else None
 
     if not txs:
@@ -86,7 +107,9 @@ async def transactions_page_clb(
         await callback.answer()
         return
 
+    caption = _caption(page, "Ваши транзакции:")
     kb = build_transactions_kb(txs, page=page_num).as_markup()
+
     if image:
         await callback.message.edit_media(
             media=InputMediaPhoto(media=image, caption=caption, parse_mode="HTML"),
@@ -118,17 +141,28 @@ async def transaction_detail_clb(
     paid_at_text = tx.paid_at.strftime("%d.%m.%Y %H:%M") if getattr(tx, "paid_at", None) else "-"
     status_text = "Оплачено" if getattr(tx, "paid", False) else "Не оплачено"
 
-    text = (
-        f"<b>Сумма:</b> {tx.amount} RUB\n"
-        f"<b>Дата создания:</b> {created_at_text}\n"
-        f"<b>Дата оплаты:</b> {paid_at_text}\n"
-        f"<b>Статус:</b> {status_text}\n"
-        f"<b>Система:</b> {tx.payment_system}\n"
-        f"<b>ID пополнения:</b> <code>{tx.order_id}</code>\n"
-        f"<b>ID транзакции:</b> <code>{tx.transaction_id}</code>"
+    values = {
+        "amount": tx.amount,
+        "created_at": created_at_text,
+        "paid_at": paid_at_text,
+        "status": status_text,
+        "payment_system": getattr(tx, "payment_system", "-"),
+        "order_id": getattr(tx, "order_id", "-"),
+        "transaction_id": getattr(tx, "transaction_id", "-"),
+    }
+
+    fallback = (
+        f"<b>Сумма:</b> {values['amount']} RUB\n"
+        f"<b>Дата создания:</b> {values['created_at']}\n"
+        f"<b>Дата оплаты:</b> {values['paid_at']}\n"
+        f"<b>Статус:</b> {values['status']}\n"
+        f"<b>Система:</b> {values['payment_system']}\n"
+        f"<b>ID пополнения:</b> <code>{values['order_id']}</code>\n"
+        f"<b>ID транзакции:</b> <code>{values['transaction_id']}</code>"
     )
 
     page = await page_repo.get_page(shop_id=shop_id, page_type=PAGE_ITEM)
+    text = _caption(page, fallback, values=values)
     image = page.image if page else None
 
     if image:

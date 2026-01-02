@@ -262,7 +262,13 @@ class ShopRepository:
         await self.session.flush()
         return DeleteCategoryResult.OK
 
-    async def get_shop_by_id(self, *, shop_id: int) -> Shop | None:
-        stmt = select(Shop).where(Shop.id == shop_id)
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+    async def get_shop_by_id(self, shop_id: int) -> Shop | None:
+        stmt = (
+            select(Shop)
+            .where(Shop.id == shop_id)
+            .options(
+                selectinload(Shop.payment_configs), 
+                selectinload(Shop.ui_assets), 
+            )
+        )
+        return await self.session.scalar(stmt)

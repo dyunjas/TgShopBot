@@ -12,11 +12,31 @@ from .auth import get_session
 from .utils.admin_role import CurrentAdmin, require_role
 from backend.database.models import Shop, ShopPage
 
-
 router = APIRouter(tags=["pages"])
 
+PageType = Literal[
+    "faq",
+    "reviews",
+    "profile",
+    "guarantees",
+    "support",
+    "main_menu",
+    "shop_menu",
 
-PageType = Literal["faq", "reviews", "profile", "guarantees", "support", "main_menu"]
+    "orders_menu",
+    "order_item_menu",
+    "transactions_menu",
+    "transaction_item_menu",
+    "promocode_menu",
+    "promocode_error_menu",
+    "promocode_success_menu",
+
+    "topup_balance_menu",        
+    "choose_payment_menu",    
+    "pally_payment_menu",      
+    "lava_payment_menu",       
+    "success_payment_menu",  
+]
 
 
 class ShopPageOut(BaseModel):
@@ -36,7 +56,7 @@ class ShopPageOut(BaseModel):
 class ShopPageCreateIn(BaseModel):
     shop_id: int
     page_type: PageType
-    title: str = Field(min_length=1, max_length=64)
+    title: str = Field(default="", max_length=64)     
     content: str = Field(min_length=1)
     image: Optional[str] = Field(default=None, max_length=255)
     is_active: bool = True
@@ -44,7 +64,7 @@ class ShopPageCreateIn(BaseModel):
 
 
 class ShopPageUpdateIn(BaseModel):
-    title: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    title: Optional[str] = Field(default=None, max_length=64)  
     content: Optional[str] = Field(default=None, min_length=1)
     image: Optional[str] = Field(default=None, max_length=255)
     is_active: Optional[bool] = None
@@ -59,9 +79,7 @@ async def _ensure_shop(session: AsyncSession, shop_id: int) -> Shop:
 
 
 async def _ensure_page(session: AsyncSession, shop_id: int, page_id: int) -> ShopPage:
-    page = await session.scalar(
-        select(ShopPage).where(ShopPage.id == page_id, ShopPage.shop_id == shop_id)
-    )
+    page = await session.scalar(select(ShopPage).where(ShopPage.id == page_id, ShopPage.shop_id == shop_id))
     if not page:
         raise HTTPException(status_code=404, detail="Page not found")
     return page
@@ -94,12 +112,7 @@ async def get_page_by_type(
 ):
     await _ensure_shop(session, shop_id)
 
-    page = await session.scalar(
-        select(ShopPage).where(
-            ShopPage.shop_id == shop_id,
-            ShopPage.page_type == page_type,
-        )
-    )
+    page = await session.scalar(select(ShopPage).where(ShopPage.shop_id == shop_id, ShopPage.page_type == page_type))
     if not page:
         raise HTTPException(status_code=404, detail="Page not found")
     return page
@@ -116,7 +129,7 @@ async def create_page(
     page = ShopPage(
         shop_id=payload.shop_id,
         page_type=payload.page_type,
-        title=payload.title,
+        title=payload.title or "",   
         content=payload.content,
         image=payload.image,
         is_active=payload.is_active,
@@ -146,6 +159,7 @@ async def update_page(
 
     if payload.title is not None:
         page.title = payload.title
+
     if payload.content is not None:
         page.content = payload.content
     if payload.image is not None:

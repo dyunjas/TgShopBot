@@ -15,11 +15,17 @@ PAGE_SUPPORT = "support"
 def _caption(page, fallback: str) -> str:
     if not page:
         return fallback
+
     title = (page.title or "").strip()
     body = (page.content or "").strip()
+
     if title and body:
         return f"<b>{title}</b>\n\n{body}"
-    return title or body or fallback
+    if body:
+        return body
+    if title:
+        return f"<b>{title}</b>"
+    return fallback
 
 
 async def _render_page(
@@ -31,17 +37,24 @@ async def _render_page(
     fallback_text: str,
 ):
     page = await page_repo.get_page(shop_id=shop_id, page_type=page_type)
-    caption = _caption(page, fallback_text)
+    text = _caption(page, fallback_text)
     image = page.image if page else None
 
+    message = callback.message
+
     if image:
-        await callback.message.edit_media(
-            media=InputMediaPhoto(media=image, caption=caption, parse_mode="HTML"),
+        await message.edit_media(
+            media=InputMediaPhoto(
+                media=image,
+                caption=text,
+                parse_mode="HTML",
+            ),
             reply_markup=back_main_menu_kb(),
         )
     else:
-        await callback.message.edit_text(
-            text=caption,
+
+        await message.edit_text(
+            text=text,
             parse_mode="HTML",
             reply_markup=back_main_menu_kb(),
         )
@@ -55,11 +68,7 @@ async def guarantees_clb(
     shop_id: int,
     page_repo: ShopPageRepository,
 ):
-    fallback = (
-        "Нажмите на ссылку ниже, чтобы ознакомиться с гарантиями!\n"
-        "<a href='https://telegra.ph/Usloviya-polzovaniya-magazinom--SHOPCHEK--SHOPCHQ-SHOPCHQ-bot-02-03'>"
-        "Ознакомиться с гарантиями</a>"
-    )
+    fallback = "Текст не задан"
     await _render_page(
         callback,
         shop_id=shop_id,
@@ -75,7 +84,7 @@ async def questions_clb(
     shop_id: int,
     page_repo: ShopPageRepository,
 ):
-    fallback = "Ответы на частые вопросы вы можете найти <a href='https://telegra.ph/Otvety-na-voprosy-05-04-10'>тут</a>"
+    fallback = "Текст не задан"
     await _render_page(
         callback,
         shop_id=shop_id,
@@ -91,7 +100,7 @@ async def reviews_clb(
     shop_id: int,
     page_repo: ShopPageRepository,
 ):
-    fallback = "Создали <a href='https://t.me/shopchek_reviews'>чат с отзывами</a>, где публикуются отзывы покупателей"
+    fallback = "Текст не задан"
     await _render_page(
         callback,
         shop_id=shop_id,
@@ -107,10 +116,7 @@ async def support_clb(
     shop_id: int,
     page_repo: ShopPageRepository,
 ):
-    fallback = (
-        "Вы можете задать свой вопрос в <a href='https://t.me/ShopsSupport_bot'>поддержку</a>. "
-        "Но перед этим рекомендуем ознакомиться с нашим FAQ"
-    )
+    fallback = "Текст не задан"
     await _render_page(
         callback,
         shop_id=shop_id,

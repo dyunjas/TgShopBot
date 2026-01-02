@@ -3,11 +3,29 @@ import { api } from "../api.js";
 
 const TYPE_OPTIONS = [
   { value: "main_menu", label: "Главное меню" },
+  { value: "shop_menu", label: "Магазин — главная (категории)" },
+
   { value: "faq", label: "FAQ" },
   { value: "reviews", label: "Отзывы" },
   { value: "profile", label: "Профиль" },
   { value: "guarantees", label: "Гарантии" },
   { value: "support", label: "Поддержка" },
+
+  { value: "orders_menu", label: "Заказы — список" },
+  { value: "order_item_menu", label: "Заказы — карточка" },
+
+  { value: "transactions_menu", label: "Транзакции — список" },
+  { value: "transaction_item_menu", label: "Транзакции — карточка" },
+
+  { value: "promocode_menu", label: "Промокод — ввод" },
+  { value: "promocode_error_menu", label: "Промокод — ошибка" },
+  { value: "promocode_success_menu", label: "Промокод — успех" },
+
+  { value: "topup_balance_menu", label: "Пополнение — ввод суммы" },
+  { value: "choose_payment_menu", label: "Пополнение — выбор платежки" },
+  { value: "pally_payment_menu", label: "Пополнение — счёт PALLY" },
+  { value: "lava_payment_menu", label: "Пополнение — счёт LAVA" },
+  { value: "success_payment_menu", label: "Пополнение — успех" },
 ];
 
 function isProbablyUrl(v) {
@@ -70,7 +88,6 @@ export default function Pages({ notify }) {
 
   async function create() {
     if (!shopId) return notify("Ошибка", "Выберите магазин");
-    if (!title.trim()) return notify("Ошибка", "Введите заголовок");
     if (!content.trim()) return notify("Ошибка", "Введите текст");
 
     try {
@@ -79,8 +96,8 @@ export default function Pages({ notify }) {
         body: {
           shop_id: Number(shopId),
           page_type: selectedType,
-          title: title.trim(),
-          content: content,
+          title: title?.trim() ?? "",
+          content,
           image: image?.trim() ? image.trim() : null,
           is_active: isActive,
           sort_order: Number(sortOrder || 0),
@@ -98,7 +115,6 @@ export default function Pages({ notify }) {
   async function update() {
     if (!current?.id) return;
     if (!shopId) return notify("Ошибка", "Выберите магазин");
-    if (!title.trim()) return notify("Ошибка", "Введите заголовок");
     if (!content.trim()) return notify("Ошибка", "Введите текст");
 
     try {
@@ -106,7 +122,7 @@ export default function Pages({ notify }) {
       const data = await api(`/api/pages/${current.id}?${qs.toString()}`, {
         method: "PATCH",
         body: {
-          title: title.trim(),
+          title: title?.trim() ?? "",
           content,
           image: image?.trim() ? image.trim() : null,
           is_active: isActive,
@@ -232,27 +248,19 @@ export default function Pages({ notify }) {
 
         <div className="form">
           <div className="field">
-            <label>Заголовок</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Например: Главное меню" />
+            <label>Заголовок (необязательно)</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Можно оставить пустым" />
           </div>
 
           <div className="field">
             <label>Текст страницы</label>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Текст страницы..."
-            />
+            <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Текст страницы..." />
           </div>
 
           <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
             <div className="field" style={{ flex: 1, minWidth: 260 }}>
               <label>Картинка (URL)</label>
-              <input
-                value={image}
-                onChange={(e) => setImage(e.target.value)}
-                placeholder="https://..."
-              />
+              <input value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://..." />
 
               {isProbablyUrl(image) ? (
                 <div style={{ marginTop: 10 }}>
@@ -262,13 +270,7 @@ export default function Pages({ notify }) {
                   <img
                     src={image.trim()}
                     alt="preview"
-                    style={{
-                      width: 84,
-                      height: 84,
-                      objectFit: "cover",
-                      borderRadius: 10,
-                      display: "block",
-                    }}
+                    style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 10, display: "block" }}
                     onError={(e) => {
                       e.currentTarget.style.display = "none";
                     }}
@@ -292,12 +294,12 @@ export default function Pages({ notify }) {
             </button>
 
             {!current ? (
-              <button className="btn ok" onClick={create} disabled={!shopId || !title.trim() || !content.trim()}>
+              <button className="btn ok" onClick={create} disabled={!shopId || !content.trim()}>
                 Создать страницу
               </button>
             ) : (
               <>
-                <button className="btn ok" onClick={update} disabled={!shopId || !title.trim() || !content.trim()}>
+                <button className="btn ok" onClick={update} disabled={!shopId || !content.trim()}>
                   Сохранить
                 </button>
                 <button className="btn danger" onClick={del}>

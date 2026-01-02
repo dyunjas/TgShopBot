@@ -16,23 +16,48 @@ PAGE_ERR = "promocode_error_menu"
 PAGE_OK = "promocode_success_menu"
 
 
-def _caption(page, fallback: str) -> str:
+def _format_template(tpl: str, values: dict[str, object]) -> str:
+    if not tpl:
+        return ""
+    out = tpl
+    for k, v in values.items():
+        out = out.replace("{" + k + "}", str(v))
+    return out
+
+
+def _caption(page, fallback: str, values: dict[str, object] | None = None) -> str:
+    values = values or {}
     if not page:
-        return fallback
-    title = page.title or ""
-    body = page.content or ""
+        return _format_template(fallback, values)
+
+    title = ((page.title or "").strip())
+    body = ((page.content or "").strip())
+
+    title = _format_template(title, values)
+    body = _format_template(body, values)
+
     if title and body:
         return f"<b>{title}</b>\n\n{body}"
-    return title or body or fallback
+    return body or (f"<b>{title}</b>" if title else _format_template(fallback, values))
 
 
-async def _send_page_photo_or_text(message_or_callback, *, page, caption: str, kb):
+async def _edit_photo_or_text(callback: CallbackQuery, *, page, caption: str, kb):
     image = page.image if page else None
     if image:
-        # message_or_callback может быть Message или CallbackQuery.message
-        await message_or_callback.answer_photo(photo=image, caption=caption, parse_mode="HTML", reply_markup=kb)
+        await callback.message.edit_media(
+            media=InputMediaPhoto(media=image, caption=caption, parse_mode="HTML"),
+            reply_markup=kb,
+        )
     else:
-        await message_or_callback.answer(caption, parse_mode="HTML", reply_markup=kb)
+        await callback.message.edit_text(caption, parse_mode="HTML", reply_markup=kb)
+
+
+async def _send_page_photo_or_text(message: Message, *, page, caption: str, kb):
+    image = page.image if page else None
+    if image:
+        await message.answer_photo(photo=image, caption=caption, parse_mode="HTML", reply_markup=kb)
+    else:
+        await message.answer(caption, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data == "enter_promocode")
@@ -45,13 +70,7 @@ async def enter_promocode_clb(
     page = await page_repo.get_page(shop_id=shop_id, page_type=PAGE_PROMO)
     caption = _caption(page, "Введите промокод:")
 
-    if page and page.image:
-        await callback.message.edit_media(
-            media=InputMediaPhoto(media=page.image, caption=caption, parse_mode="HTML"),
-            reply_markup=promocode_kb(),
-        )
-    else:
-        await callback.message.edit_text(caption, parse_mode="HTML", reply_markup=promocode_kb())
+    await _edit_photo_or_text(callback, page=page, caption=caption, kb=promocode_kb())
 
     await state.set_state(PromocodeStates.waiting_for_code)
     await callback.answer()
@@ -87,9 +106,8 @@ async def process_promocode_msg(
     await user_repo.increase_balance(shop_id=shop_id, tg_id=tg_id, amount=promocode.amount)
 
     page = await page_repo.get_page(shop_id=shop_id, page_type=PAGE_OK)
-    caption = (
-        _caption(page, "✅ Промокод активирован!")
-        + f"\n\n🎁 Баланс пополнен на {promocode.amount} RUB."
-    )
+    values = {"amount": promocode.amount}
+
+    caption = _caption(page, "✅ Промокод активирован!\n\n🎁 Баланс пополнен на {amount} RUB.", values=values)
     await _send_page_photo_or_text(message, page=page, caption=caption, kb=back_promocode_kb())
     await state.clear()

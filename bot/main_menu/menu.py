@@ -10,6 +10,22 @@ router = Router()
 MAIN_MENU_TYPE = "main_menu"
 
 
+def _build_caption(page, fallback_text: str) -> str:
+    if not page:
+        return fallback_text
+
+    title = (page.title or "").strip()
+    body = (page.content or "").strip()
+
+    if title and body:
+        return f"<b>{title}</b>\n\n{body}"
+    if title:
+        return f"<b>{title}</b>"
+    if body:
+        return body
+    return fallback_text
+
+
 @router.message(Command("start"))
 async def start_cmd(
     message: Message,
@@ -19,11 +35,8 @@ async def start_cmd(
 ):
     page = await page_repo.get_page(shop_id=shop_id, page_type=MAIN_MENU_TYPE)
 
-    caption = page.content if page else "Главное меню"
-    title = page.title if page and page.title else "Главное меню"
+    caption = _build_caption(page, "Главное меню")
     img = page.image if page else None
-
-    caption = f"<b>{title}</b>\n\n{caption}"
 
     if img:
         await message.answer_photo(
@@ -49,20 +62,12 @@ async def main_menu_clb(
 ):
     page = await page_repo.get_page(shop_id=shop_id, page_type=MAIN_MENU_TYPE)
 
-    caption = page.content if page else "Главное меню"
-    title = page.title if page and page.title else "Главное меню"
+    caption = _build_caption(page, "Главное меню")
     img = page.image if page else None
 
-    caption = f"<b>{title}</b>\n\n{caption}"
-
     if img:
-        content = InputMediaPhoto(
-            media=img,
-            caption=caption,
-            parse_mode="HTML",
-        )
         await callback.message.edit_media(
-            media=content,
+            media=InputMediaPhoto(media=img, caption=caption, parse_mode="HTML"),
             reply_markup=main_menu_kb(),
         )
     else:

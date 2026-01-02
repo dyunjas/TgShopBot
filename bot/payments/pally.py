@@ -10,41 +10,29 @@ from backend.states import PaymentStates
 from backend.payments.generate_pally_invoice import create_invoice_pally, get_invoice_status_pally
 from backend.repositories.user_repository import ShopUserRepository
 from backend.repositories.transaction_repository import ShopTransactionRepository
-from backend.repositories.shop_repository import ShopRepository
+from backend.repositories.shop_page_repository import ShopPageRepository
 from backend.core.logger_config import logger
 
 from .keyboards import back_profile_kb, payment_menu_kb
 
 router = Router()
 
+PAGE_PALLY = "pally_payment_menu"
+PAGE_SUCCESS = "success_payment_menu"
 
-async def _get_payment_ui_and_urls(
-    shop_repo: ShopRepository,
-    shop_id: int,
-    provider: str = "PALLY",
-) -> tuple[str, str, str, str]:
 
-    shop = await shop_repo.get_shop_by_id(shop_id=shop_id)
-
-    ui = getattr(shop, "ui_assets", None) if shop else None
-    img_topup = (getattr(ui, "img_topup_menu", "") if ui else "").strip()
-    img_success = (getattr(ui, "img_success_payment_menu", "") if ui else "").strip()
-
-    success_url = ""
-    fail_url = ""
-    try:
-        cfg = None
-        for c in (getattr(shop, "payment_configs", None) or []):
-            if (getattr(c, "provider", "") or "").lower() == provider.lower():
-                cfg = c
-                break
-        if cfg:
-            success_url = (getattr(cfg, "success_url", "") or "").strip()
-            fail_url = (getattr(cfg, "fail_url", "") or "").strip()
-    except Exception:
-        pass
-
-    return img_topup, img_success, success_url, fail_url
+def _caption(page, fallback: str) -> str:
+    if not page:
+        return fallback
+    title = (page.title or "").strip()
+    body = (page.content or "").strip()
+    if title and body:
+        return f"<b>{title}</b>\n\n{body}"
+    if body:
+        return body
+    if title:
+        return f"<b>{title}</b>"
+    return fallback
 
 
 @router.callback_query(F.data == "pay_pally", PaymentStates.waiting_for_payment_system)
@@ -53,7 +41,7 @@ async def pay_pally_clb(
     state: FSMContext,
     shop_id: int,
     transaction_repo: ShopTransactionRepository,
-    shop_repo: ShopRepository,
+    page_repo: ShopPageRepository,
 ):
     tg_id = callback.from_user.id
     data = await state.get_data()
@@ -62,13 +50,8 @@ async def pay_pally_clb(
     if amount <= 0:
         return await callback.answer("Сумма не найдена, начните заново", show_alert=True)
 
-    img_topup, _, success_url, fail_url = await _get_payment_ui_and_urls(
-        shop_repo=shop_repo,
-        shop_id=shop_id,
-        provider="PALLY",
-    )
-    success_url = success_url or "https://google.com"
-    fail_url = fail_url or "https://google.com"
+    success_url = "https://google.com"
+    fail_url = "https://google.com"
 
     logger.info(f"[PALLY] shop_id={shop_id} tg_id={tg_id} amount={amount} data={data}")
 
@@ -106,14 +89,17 @@ async def pay_pally_clb(
         order_id=order_id,
     )
 
-    text = (
+    page = await page_repo.get_page(shop_id=shop_id, page_type=PAGE_PALLY)
+    fallback = (
         "💳 Счёт создан, перейдите по ссылке для оплаты!\n"
         f"<pre><code>ID транзакции: {invoice_id}</code></pre>\n"
     )
+    text = _caption(page, fallback)
+    image = page.image if page else None
 
     try:
-        if img_topup:
-            content = InputMediaPhoto(media=img_topup, caption=text, parse_mode="HTML")
+        if image:
+            content = InputMediaPhoto(media=image, caption=text, parse_mode="HTML")
             await callback.message.edit_media(
                 media=content,
                 reply_markup=payment_menu_kb(
@@ -123,20 +109,31 @@ async def pay_pally_clb(
                 ),
             )
         else:
-            await callback.message.edit_caption(
-                caption=text,
-                parse_mode="HTML",
-                reply_markup=payment_menu_kb(
-                    invoice_url=invoice_url,
-                    invoice_id=str(invoice_id),
-                    check_prefix="check_payment_pally",
-                ),
-            )
+            try:
+                await callback.message.edit_caption(
+                    caption=text,
+                    parse_mode="HTML",
+                    reply_markup=payment_menu_kb(
+                        invoice_url=invoice_url,
+                        invoice_id=str(invoice_id),
+                        check_prefix="check_payment_pally",
+                    ),
+                )
+            except Exception:
+                await callback.message.edit_text(
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=payment_menu_kb(
+                        invoice_url=invoice_url,
+                        invoice_id=str(invoice_id),
+                        check_prefix="check_payment_pally",
+                    ),
+                )
     except Exception as e:
-        logger.warning(f"[PALLY] edit message failed, sending new: {e}")
-        if img_topup:
+        logger.warning(f"[PALLY] edit failed, sending new: {e}")
+        if image:
             await callback.message.answer_photo(
-                photo=img_topup,
+                photo=image,
                 caption=text,
                 parse_mode="HTML",
                 reply_markup=payment_menu_kb(
@@ -167,24 +164,17 @@ async def check_pally_payment_clb(
     shop_id: int,
     user_repo: ShopUserRepository,
     transaction_repo: ShopTransactionRepository,
-    shop_repo: ShopRepository,
+    page_repo: ShopPageRepository,
 ):
     tg_id = callback.from_user.id
     invoice_id = callback.data.split(":", 1)[1]
 
-    tx = await transaction_repo.get_transaction_by_payment_system_id(
-        shop_id=shop_id,
-        transaction_id=invoice_id,
-    )
+    tx = await transaction_repo.get_transaction_by_payment_system_id(shop_id=shop_id, transaction_id=invoice_id)
     if not tx:
         await callback.answer("Транзакция не найдена.", show_alert=True)
         return
 
-    status_data = await get_invoice_status_pally(
-        session=transaction_repo.session,
-        shop_id=shop_id,
-        bill_id=invoice_id,
-    )
+    status_data = await get_invoice_status_pally(session=transaction_repo.session, shop_id=shop_id, bill_id=invoice_id)
 
     if str(status_data.get("success")).lower() != "true":
         await callback.answer(f"Ошибка запроса: {status_data}", show_alert=True)
@@ -201,26 +191,26 @@ async def check_pally_payment_clb(
         await user_repo.increase_balance(shop_id=shop_id, tg_id=tg_id, amount=tx.amount)
         await transaction_repo.mark_transaction_as_paid(shop_id=shop_id, transaction_id=invoice_id)
 
-        _, img_success, _, _ = await _get_payment_ui_and_urls(
-            shop_repo=shop_repo,
-            shop_id=shop_id,
-            provider="PALLY",
-        )
-
-        text = f"✅ Оплата успешно завершена!\n\nБаланс пополнен на {tx.amount} RUB"
+        page = await page_repo.get_page(shop_id=shop_id, page_type=PAGE_SUCCESS)
+        fallback = f"✅ Оплата успешно завершена!\n\nБаланс пополнен на {tx.amount} RUB"
+        text = _caption(page, fallback)
+        image = page.image if page else None
 
         try:
-            if img_success:
-                content = InputMediaPhoto(media=img_success, caption=text)
+            if image:
+                content = InputMediaPhoto(media=image, caption=text, parse_mode="HTML")
                 await callback.message.edit_media(media=content, reply_markup=back_profile_kb())
             else:
-                await callback.message.edit_caption(caption=text, reply_markup=back_profile_kb())
+                try:
+                    await callback.message.edit_caption(caption=text, parse_mode="HTML", reply_markup=back_profile_kb())
+                except Exception:
+                    await callback.message.edit_text(text=text, parse_mode="HTML", reply_markup=back_profile_kb())
         except Exception as e:
             logger.warning(f"[PALLY] success edit failed, sending new: {e}")
-            if img_success:
-                await callback.message.answer_photo(photo=img_success, caption=text, reply_markup=back_profile_kb())
+            if image:
+                await callback.message.answer_photo(photo=image, caption=text, parse_mode="HTML", reply_markup=back_profile_kb())
             else:
-                await callback.message.answer(text, reply_markup=back_profile_kb())
+                await callback.message.answer(text, parse_mode="HTML", reply_markup=back_profile_kb())
 
         logger.info(f"[PALLY] Payment OK shop_id={shop_id} tg_id={tg_id} invoice_id={invoice_id} amount={tx.amount}")
 

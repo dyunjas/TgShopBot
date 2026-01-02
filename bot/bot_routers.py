@@ -3,7 +3,7 @@ from aiogram import Router
 from .submenu import (
     static_pages
 )
-from .shop.item_purchase import item_purchase, purchase_process
+from .shop.item_purchase import item_purchase, purchase_process, reviews
 from .shop.shop_nav import (
     main_categories,
     shop_nav
@@ -25,6 +25,7 @@ router = Router()
 
 router.include_router(static_pages.router)
 router.include_router(item_purchase.router)
+router.include_router(reviews.router)
 router.include_router(purchase_process.router)
 router.include_router(main_categories.router)
 router.include_router(shop_nav.router)
