@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
+import FancySelect from "../components/FancySelect.jsx";
 
 const ORDERS_URL = "/api/admin/my-orders";
 
@@ -51,7 +52,6 @@ export default function Orders({ notify }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // filters
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [limit, setLimit] = useState(50);
@@ -109,48 +109,52 @@ export default function Orders({ notify }) {
       <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h2 style={{ margin: 0 }}>Заказы</h2>
-          <div className="muted" style={{ marginTop: 6 }}>
-            {loading ? "Загружаю…" : `Показано: ${filteredOrders.length}`}
+          <div className="hint" style={{ marginTop: 6 }}>
+            {loading ? "Загружаю..." : `Показано: ${filteredOrders.length}`}
           </div>
         </div>
 
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           <input
             style={{ minWidth: 260 }}
-            placeholder="Поиск по номеру заказа, ID пользователя, названию товара…"
+            placeholder="Поиск по номеру заказа, ID пользователя, названию товара..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
 
-          <select
-            value={status}
-            onChange={(e) => {
-              setOffset(0);
-              setStatus(e.target.value);
-            }}
-            title="Фильтр по статусу"
-          >
-            <option value="all">Все статусы</option>
-            <option value="open">Новые</option>
-            <option value="in_work">В работе</option>
-            <option value="done">Выполненные</option>
-            <option value="refunded">Возвраты</option>
-            <option value="canceled">Отменённые</option>
-          </select>
+          <div style={{ minWidth: 220 }}>
+            <FancySelect
+              value={status}
+              onChange={(v) => {
+                setOffset(0);
+                setStatus(v);
+              }}
+              options={[
+                { value: "all", label: "Все статусы" },
+                { value: "open", label: "Новые" },
+                { value: "in_work", label: "В работе" },
+                { value: "done", label: "Выполненные" },
+                { value: "refunded", label: "Возвраты" },
+                { value: "canceled", label: "Отменённые" },
+              ]}
+            />
+          </div>
 
-          <select
-            value={String(limit)}
-            onChange={(e) => {
-              setOffset(0);
-              setLimit(Number(e.target.value));
-            }}
-            title="Сколько показывать на странице"
-          >
-            <option value="20">20 / стр.</option>
-            <option value="50">50 / стр.</option>
-            <option value="100">100 / стр.</option>
-            <option value="200">200 / стр.</option>
-          </select>
+          <div style={{ minWidth: 170 }}>
+            <FancySelect
+              value={String(limit)}
+              onChange={(v) => {
+                setOffset(0);
+                setLimit(Number(v));
+              }}
+              options={[
+                { value: "20", label: "20 / стр." },
+                { value: "50", label: "50 / стр." },
+                { value: "100", label: "100 / стр." },
+                { value: "200", label: "200 / стр." },
+              ]}
+            />
+          </div>
 
           <button className="btn" onClick={loadOrders} disabled={loading}>
             Обновить
@@ -176,7 +180,7 @@ export default function Orders({ notify }) {
           <tbody>
             {!loading && filteredOrders.length === 0 && (
               <tr>
-                <td colSpan={8} className="muted" style={{ padding: 16 }}>
+                <td colSpan={8} className="hint" style={{ padding: 16 }}>
                   Ничего не найдено
                 </td>
               </tr>
@@ -226,7 +230,7 @@ export default function Orders({ notify }) {
             Вперёд →
           </button>
 
-          <div className="muted" style={{ marginLeft: "auto" }}>
+          <div className="hint" style={{ marginLeft: "auto" }}>
             Страница: <b>{Math.floor(offset / limit) + 1}</b>
           </div>
         </div>

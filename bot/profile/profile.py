@@ -1,10 +1,11 @@
 from aiogram import F, Router
-from aiogram.types import CallbackQuery, InputMediaPhoto
+from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 from backend.repositories.user_repository import ShopUserRepository
 from backend.repositories.shop_page_repository import ShopPageRepository
 from .keyboards import profile_kb
+from bot.utils.media_fallback import safe_edit_photo_or_text
 
 router = Router()
 
@@ -92,17 +93,13 @@ async def _render_profile(
     )
     image = (page.image if page else None) or None
 
-    if image:
-        await callback.message.edit_media(
-            media=InputMediaPhoto(media=image, caption=caption, parse_mode="HTML"),
-            reply_markup=profile_kb(),
-        )
-    else:
-        await callback.message.edit_text(
-            text=caption,
-            parse_mode="HTML",
-            reply_markup=profile_kb(),
-        )
+    await safe_edit_photo_or_text(
+        message=callback.message,
+        image=image,
+        text=caption,
+        parse_mode="HTML",
+        reply_markup=profile_kb(),
+    )
 
     await callback.answer()
 

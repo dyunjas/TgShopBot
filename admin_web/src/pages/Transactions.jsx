@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
+import ShopSelect from "../components/ShopSelect.jsx";
+import FancySelect from "../components/FancySelect.jsx";
 
 function fmtDate(v) {
   if (!v) return "—";
@@ -74,43 +76,51 @@ export default function Transactions({ notify }) {
         </div>
 
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-          <input
-            style={{ minWidth: 220 }}
-            value={shopId}
-            onChange={(e) => {
-              setOffset(0);
-              setShopId(e.target.value.replace(/[^\d]/g, ""));
-            }}
-            placeholder="ID магазина (необязательно)"
-            title="Можно оставить пустым — покажет по всем магазинам"
-          />
+          <div style={{ minWidth: 260 }}>
+            <ShopSelect
+              value={shopId}
+              onChange={(v) => {
+                setOffset(0);
+                setShopId(v);
+              }}
+              notify={notify}
+              label="Магазин"
+              allowEmpty
+              emptyLabel="Все магазины"
+              showRefresh={false}
+            />
+          </div>
 
-          <select
-            value={paidFilter}
-            onChange={(e) => {
-              setOffset(0);
-              setPaidFilter(e.target.value);
-            }}
-            title="Фильтр по оплате"
-          >
-            <option value="">{PAID_LABEL[""]}</option>
-            <option value="paid">{PAID_LABEL.paid}</option>
-            <option value="unpaid">{PAID_LABEL.unpaid}</option>
-          </select>
+          <div style={{ minWidth: 220 }}>
+            <FancySelect
+              value={paidFilter}
+              onChange={(v) => {
+                setOffset(0);
+                setPaidFilter(v);
+              }}
+              options={[
+                { value: "", label: PAID_LABEL[""] },
+                { value: "paid", label: PAID_LABEL.paid },
+                { value: "unpaid", label: PAID_LABEL.unpaid },
+              ]}
+            />
+          </div>
 
-          <select
-            value={String(limit)}
-            onChange={(e) => {
-              setOffset(0);
-              setLimit(Number(e.target.value));
-            }}
-            title="Сколько строк показывать"
-          >
-            <option value="20">20 / стр.</option>
-            <option value="50">50 / стр.</option>
-            <option value="100">100 / стр.</option>
-            <option value="200">200 / стр.</option>
-          </select>
+          <div style={{ minWidth: 170 }}>
+            <FancySelect
+              value={String(limit)}
+              onChange={(v) => {
+                setOffset(0);
+                setLimit(Number(v));
+              }}
+              options={[
+                { value: "20", label: "20 / стр." },
+                { value: "50", label: "50 / стр." },
+                { value: "100", label: "100 / стр." },
+                { value: "200", label: "200 / стр." },
+              ]}
+            />
+          </div>
 
           <button className="btn" onClick={load} disabled={loading}>
             Обновить
@@ -206,3 +216,4 @@ export default function Transactions({ notify }) {
     </div>
   );
 }
+

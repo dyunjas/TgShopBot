@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from html import escape
 
 from aiogram import Bot
 from aiogram.types import Message, BufferedInputFile, InlineKeyboardMarkup
@@ -33,19 +34,9 @@ def _reply_to_support_kb() -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def _operator_name(message: Message) -> str:
-    u = message.from_user
-    if not u:
-        return "Сотрудник"
-    name = (u.full_name or "").strip()
-    if not name and u.username:
-        name = u.username
-    return name or "Сотрудник"
-
-
 def _make_header(*, operator_name: str, order_id: str) -> str:
     return (
-        f"Сотрудник <b>{operator_name}</b> <b>{order_id}</b>🔥🍪\n\n"
+        f"Сотрудник <b>{escape(operator_name)}</b> <b>{escape(order_id)}</b> 🔥🍪\n\n"
     )
 
 
@@ -57,6 +48,7 @@ async def relay_admin_message_to_user(
     user_tg_id: int,
     order_id: str,  
     message: Message,
+    operator_name: str | None = None,
 ) -> None:
     shop = await shop_repo.get_shop_by_id(shop_id=shop_id)
     token = getattr(shop, "bot_token", None) if shop else None
@@ -66,13 +58,13 @@ async def relay_admin_message_to_user(
 
     shop_bot = _make_shop_bot(token)
 
-    operator = _operator_name(message)
+    operator = (operator_name or "").strip() or "Сотрудник"
     header = _make_header(operator_name=operator, order_id=order_id)
     reply_kb = _reply_to_support_kb()
 
     try:
         if message.text:
-            text = header + (message.text or "")
+            text = header + escape(message.text or "")
             try:
                 await shop_bot.send_message(chat_id=user_tg_id, text=text, reply_markup=reply_kb)
             except (TelegramForbiddenError, TelegramBadRequest) as e:
@@ -83,7 +75,7 @@ async def relay_admin_message_to_user(
             best = message.photo[-1]
             inp = await _download_as_inputfile(drop_bot, best.file_id, "photo.jpg")
             cap = (message.caption or "").strip()
-            caption = (header + cap)[:1024] if cap else (header + "📷 Фото")[:1024]
+            caption = (header + escape(cap))[:1024] if cap else (header + "📷 Фото")[:1024]
             try:
                 await shop_bot.send_photo(
                     chat_id=user_tg_id,
@@ -99,7 +91,8 @@ async def relay_admin_message_to_user(
             doc = message.document
             inp = await _download_as_inputfile(drop_bot, doc.file_id, doc.file_name or "file")
             cap = (message.caption or "").strip()
-            caption = (header + cap)[:1024] if cap else (header + f"📎 {doc.file_name or 'Документ'}")[:1024]
+            fallback = f"📎 {doc.file_name or 'Документ'}"
+            caption = (header + escape(cap))[:1024] if cap else (header + escape(fallback))[:1024]
             try:
                 await shop_bot.send_document(
                     chat_id=user_tg_id,
@@ -115,7 +108,7 @@ async def relay_admin_message_to_user(
             vid = message.video
             inp = await _download_as_inputfile(drop_bot, vid.file_id, "video.mp4")
             cap = (message.caption or "").strip()
-            caption = (header + cap)[:1024] if cap else (header + "🎥 Видео")[:1024]
+            caption = (header + escape(cap))[:1024] if cap else (header + "🎥 Видео")[:1024]
             try:
                 await shop_bot.send_video(
                     chat_id=user_tg_id,
@@ -131,7 +124,7 @@ async def relay_admin_message_to_user(
             v = message.voice
             inp = await _download_as_inputfile(drop_bot, v.file_id, "voice.ogg")
             cap = (message.caption or "").strip()
-            caption = (header + cap)[:1024] if cap else (header + "🎙 Голос")[:1024]
+            caption = (header + escape(cap))[:1024] if cap else (header + "🎙 Голос")[:1024]
             try:
                 await shop_bot.send_voice(
                     chat_id=user_tg_id,
@@ -147,7 +140,7 @@ async def relay_admin_message_to_user(
             a = message.audio
             inp = await _download_as_inputfile(drop_bot, a.file_id, a.file_name or "audio.mp3")
             cap = (message.caption or "").strip()
-            caption = (header + cap)[:1024] if cap else (header + "🎵 Аудио")[:1024]
+            caption = (header + escape(cap))[:1024] if cap else (header + "🎵 Аудио")[:1024]
             try:
                 await shop_bot.send_audio(
                     chat_id=user_tg_id,

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InputMediaPhoto
+from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 from backend.states import PaymentStates
 from backend.core.logger_config import logger
 from backend.repositories.shop_page_repository import ShopPageRepository
 from backend.repositories.shop_repository import ShopRepository
+from bot.utils.media_fallback import safe_answer_photo_or_text, safe_edit_photo_or_text
 
 from .keyboards import back_profile_kb, payment_choice_kb
 
@@ -61,22 +62,22 @@ async def topup_balance_clb(
     image = page.image if page else None
 
     try:
-        if image:
-            await callback.message.edit_media(
-                media=InputMediaPhoto(media=image, caption=text, parse_mode="HTML"),
-                reply_markup=back_profile_kb(),
-            )
-        else:
-            try:
-                await callback.message.edit_caption(caption=text, parse_mode="HTML", reply_markup=back_profile_kb())
-            except Exception:
-                await callback.message.edit_text(text=text, parse_mode="HTML", reply_markup=back_profile_kb())
+        await safe_edit_photo_or_text(
+            message=callback.message,
+            image=image,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=back_profile_kb(),
+        )
     except Exception as e:
-        logger.warning(f"topup_balance_clb: edit failed, sending new: {e}")
-        if image:
-            await callback.message.answer_photo(photo=image, caption=text, parse_mode="HTML", reply_markup=back_profile_kb())
-        else:
-            await callback.message.answer(text, parse_mode="HTML", reply_markup=back_profile_kb())
+        logger.warning(f"topup_balance_clb: safe edit failed, sending new: {e}")
+        await safe_answer_photo_or_text(
+            message=callback.message,
+            image=image,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=back_profile_kb(),
+        )
 
     await state.set_state(PaymentStates.waiting_for_amount)
     await callback.answer()
@@ -99,15 +100,13 @@ async def choose_payment_system_msg(
         if amount <= 0:
             raise ValueError
     except ValueError:
-        if topup_image:
-            await message.answer_photo(
-                photo=topup_image,
-                caption=topup_text_invalid,
-                parse_mode="HTML",
-                reply_markup=back_profile_kb(),
-            )
-        else:
-            await message.answer(topup_text_invalid, parse_mode="HTML", reply_markup=back_profile_kb())
+        await safe_answer_photo_or_text(
+            message=message,
+            image=topup_image,
+            text=topup_text_invalid,
+            parse_mode="HTML",
+            reply_markup=back_profile_kb(),
+        )
         return
 
     await state.update_data(amount=amount)
@@ -121,10 +120,13 @@ async def choose_payment_system_msg(
         text = _caption(page_choose, "❌ Сейчас нет доступных способов оплаты. Напишите в поддержку.")
         image = page_choose.image if page_choose else None
 
-        if image:
-            await message.answer_photo(photo=image, caption=text, parse_mode="HTML", reply_markup=back_profile_kb())
-        else:
-            await message.answer(text, parse_mode="HTML", reply_markup=back_profile_kb())
+        await safe_answer_photo_or_text(
+            message=message,
+            image=image,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=back_profile_kb(),
+        )
 
         await state.clear()
         return
@@ -135,9 +137,12 @@ async def choose_payment_system_msg(
 
     kb = payment_choice_kb(show_pally=show_pally, show_lava=show_lava)
 
-    if choose_image:
-        await message.answer_photo(photo=choose_image, caption=choose_text, parse_mode="HTML", reply_markup=kb)
-    else:
-        await message.answer(choose_text, parse_mode="HTML", reply_markup=kb)
+    await safe_answer_photo_or_text(
+        message=message,
+        image=choose_image,
+        text=choose_text,
+        parse_mode="HTML",
+        reply_markup=kb,
+    )
 
     await state.set_state(PaymentStates.waiting_for_payment_system)

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
+import ShopSelect from "../components/ShopSelect.jsx";
+import FancySelect from "../components/FancySelect.jsx";
 
 const PROVIDER_LABEL = {
   lava: "Lava",
@@ -7,7 +9,7 @@ const PROVIDER_LABEL = {
 };
 
 function maskSecret(v) {
-  if (!v) return "—";
+  if (!v) return "-";
   const s = String(v);
   if (s.length <= 6) return "••••••";
   return `${s.slice(0, 2)}••••••${s.slice(-2)}`;
@@ -31,7 +33,7 @@ export default function Payments({ notify }) {
 
   const helpText = useMemo(() => {
     if (provider === "lava") return "Для Lava обычно нужны: ID магазина и секретный ключ.";
-    if (provider === "pally") return "Для Pally обычно нужен: API-токен.";
+    if (provider === "pally") return "Для Pally обязательны: shop_id_value и api_token.";
     return "";
   }, [provider]);
 
@@ -73,6 +75,9 @@ export default function Payments({ notify }) {
 
   async function create() {
     if (!shopId) return notify?.("Ошибка", "Выберите магазин");
+    if (provider === "pally" && (!shopIdValue.trim() || !apiToken.trim())) {
+      return notify?.("Ошибка", "Для Pally обязательны shop_id_value и api_token");
+    }
     try {
       await api("/api/payments", {
         method: "POST",
@@ -89,7 +94,7 @@ export default function Payments({ notify }) {
           is_active: isActive,
         },
       });
-      notify?.("Ок", "Платёжка добавлена");
+      notify?.("Ок", "Платежка добавлена");
       resetForm();
       load();
     } catch (e) {
@@ -100,6 +105,9 @@ export default function Payments({ notify }) {
   async function updateSelected() {
     if (!shopId) return notify?.("Ошибка", "Выберите магазин");
     if (!selectedId) return notify?.("Ошибка", "Выберите конфиг из списка слева");
+    if (provider === "pally" && (!shopIdValue.trim() || !apiToken.trim())) {
+      return notify?.("Ошибка", "Для Pally обязательны shop_id_value и api_token");
+    }
     try {
       const qs = new URLSearchParams({ shop_id: String(shopId) });
       await api(`/api/payments/${selectedId}?${qs.toString()}`, {
@@ -124,14 +132,14 @@ export default function Payments({ notify }) {
 
   async function del(cfgId) {
     if (!shopId) return notify?.("Ошибка", "Выберите магазин");
-    const ok = window.confirm("Удалить эту платёжку?");
+    const ok = window.confirm("Удалить эту платежку?");
     if (!ok) return;
 
     try {
       const qs = new URLSearchParams({ shop_id: String(shopId) });
       await api(`/api/payments/${cfgId}?${qs.toString()}`, { method: "DELETE" });
 
-      notify?.("Ок", "Платёжка удалена");
+      notify?.("Ок", "Платежка удалена");
 
       if (selectedId === cfgId) resetForm();
       load();
@@ -147,28 +155,24 @@ export default function Payments({ notify }) {
   return (
     <div className="grid cols2">
       <div className="card">
-        <h2 style={{ marginTop: 0 }}>Платёжки</h2>
+        <h2 style={{ marginTop: 0 }}>Платежные системы</h2>
         <div className="muted" style={{ marginTop: 6 }}>
-          {loading ? "Загружаю…" : "Подключения оплаты для выбранного магазина"}
+          {loading ? "Загружаю..." : "Подключения оплаты для выбранного магазина"}
         </div>
 
-        <div className="row" style={{ marginTop: 12 }}>
-          <div className="field">
-            <label>ID магазина</label>
-            <input
-              value={shopId}
-              onChange={(e) => setShopId(e.target.value.replace(/[^\d]/g, ""))}
-              placeholder="Пример: 2"
-              inputMode="numeric"
-            />
-          </div>
+        <div className="row controlRow" style={{ marginTop: 12 }}>
+          <ShopSelect value={shopId} onChange={setShopId} notify={notify} label="Магазин" showRefresh={false} />
 
           <div className="field">
             <label>Провайдер</label>
-            <select value={provider} onChange={(e) => setProvider(e.target.value)}>
-              <option value="lava">{PROVIDER_LABEL.lava}</option>
-              <option value="pally">{PROVIDER_LABEL.pally}</option>
-            </select>
+            <FancySelect
+              value={provider}
+              onChange={setProvider}
+              options={[
+                { value: "lava", label: PROVIDER_LABEL.lava },
+                { value: "pally", label: PROVIDER_LABEL.pally },
+              ]}
+            />
           </div>
         </div>
 
@@ -211,14 +215,13 @@ export default function Payments({ notify }) {
               <tr key={c.id}>
                 <td>
                   <div style={{ fontWeight: 900 }}>
-                    {PROVIDER_LABEL[c.provider] || c.provider || "Платёжка"}
+                    {PROVIDER_LABEL[c.provider] || c.provider || "Платежка"}
                   </div>
 
                   <div className="small">
                     {c.provider === "lava" ? (
                       <>
-                        ID: <span className="mono">{c.shop_id_value || "—"}</span> · ключ:{" "}
-                        <span className="mono">{maskSecret(c.secret_key)}</span>
+                        ID: <span className="mono">{c.shop_id_value || "-"}</span> · ключ: <span className="mono">{maskSecret(c.secret_key)}</span>
                       </>
                     ) : (
                       <>
@@ -228,10 +231,10 @@ export default function Payments({ notify }) {
                   </div>
 
                   <div className="small">
-                    success_url: <span className="mono">{c.success_url || "—"}</span>
+                    success_url: <span className="mono">{c.success_url || "-"}</span>
                   </div>
                   <div className="small">
-                    fail_url: <span className="mono">{c.fail_url || "—"}</span>
+                    fail_url: <span className="mono">{c.fail_url || "-"}</span>
                   </div>
                 </td>
 
@@ -260,7 +263,7 @@ export default function Payments({ notify }) {
       </div>
 
       <div className="card">
-        <h2 style={{ marginTop: 0 }}>{selectedId ? "Редактирование платёжки" : "Подключить платёжку"}</h2>
+        <h2 style={{ marginTop: 0 }}>{selectedId ? "Редактирование платежки" : "Подключить платежку"}</h2>
         <div className="muted" style={{ marginTop: 6 }}>
           {selectedId ? "Измените поля и сохраните" : "Заполните данные и создайте подключение"}
         </div>
@@ -289,14 +292,24 @@ export default function Payments({ notify }) {
               </div>
             </>
           ) : (
-            <div className="field">
-              <label>API-токен</label>
-              <input
-                value={apiToken}
-                onChange={(e) => setApiToken(e.target.value)}
-                placeholder="Введите API-токен"
-              />
-            </div>
+            <>
+              <div className="field">
+                <label>ID магазина в Pally</label>
+                <input
+                  value={shopIdValue}
+                  onChange={(e) => setShopIdValue(e.target.value)}
+                  placeholder="Введите shop_id_value"
+                />
+              </div>
+              <div className="field">
+                <label>API-токен</label>
+                <input
+                  value={apiToken}
+                  onChange={(e) => setApiToken(e.target.value)}
+                  placeholder="Введите API-токен"
+                />
+              </div>
+            </>
           )}
 
           <div className="field">
@@ -348,8 +361,8 @@ export default function Payments({ notify }) {
 
           <div className="small">
             {selectedId
-              ? "Чтобы создать новое подключение — нажмите «Создать как новое» или «Сбросить форму»."
-              : "Если нужно изменить существующее — выберите его слева и нажмите «Сохранить»."}
+              ? "Чтобы создать новое подключение - нажмите «Создать как новое» или «Сбросить форму»."
+              : "Если нужно изменить существующее - выберите его слева и нажмите «Сохранить»."}
           </div>
         </div>
       </div>

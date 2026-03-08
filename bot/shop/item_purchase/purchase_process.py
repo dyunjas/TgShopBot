@@ -67,6 +67,12 @@ async def forward_user_to_topic(
 
     drop_bot = make_drop_bot()
     try:
+        logger.info(
+            f"[ORDER] user_support_message shop_id={shop_id} order_id={order.order_id} "
+            f"user_tg_id={tg_id} msg_id={message.message_id} "
+            f"has_text={bool(message.text)} has_caption={bool(message.caption)} "
+            f"has_photo={bool(message.photo)} has_doc={bool(message.document)}"
+        )
         await relay_user_message_to_topic(
             shop_bot=message.bot,   # текущий SHOP-бот
             drop_bot=drop_bot,      # DropOrders bot
@@ -114,6 +120,10 @@ async def forward_user_to_topic(
         await message.answer(
             text=header + preview,
             reply_markup=support_chat_kb_user(),
+        )
+        logger.info(
+            f"[ORDER] user_support_message_forwarded shop_id={shop_id} order_id={order.order_id} "
+            f"user_tg_id={tg_id} topic_id={order.drop_topic_id}"
         )
 
     except Exception as e:

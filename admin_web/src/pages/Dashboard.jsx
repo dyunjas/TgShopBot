@@ -9,6 +9,7 @@ import Orders from "./Orders.jsx";
 import Transactions from "./Transactions.jsx";
 import CatalogManager from "./CatalogManager.jsx";
 import Broadcast from "./Broadcast.jsx";
+import Operators from "./Operators.jsx";
 
 export default function Dashboard({ onLogout, notify }) {
   const [me, setMe] = useState(null);
@@ -50,9 +51,10 @@ export default function Dashboard({ onLogout, notify }) {
         { key: "transactions", label: "Оплаты" },
         { key: "catalog", label: "Каталог" },
         { key: "broadcast", label: "Рассылка" },
+        { key: "operators", label: "Операторы" },
         { key: "shops", label: "Магазины" },
         { key: "pages", label: "Страницы" },
-        { key: "payments", label: "Платёжки" }
+        { key: "payments", label: "Платежные системы" }
       );
     }
 
@@ -63,24 +65,32 @@ export default function Dashboard({ onLogout, notify }) {
     <div className="appShell">
       <aside className="sidebar">
         <div className="sidebarBrand">
-          <div className="sidebarTitle">DP Shops</div>
-          <div className="sidebarSub">Admin</div>
+          <img
+            className="sidebarLogo"
+            src="/logo.svg"
+            alt="DP Shops"
+            width="190"
+            height="63"
+            decoding="async"
+          />
         </div>
 
-        <div className="sidebarNav">
+        <nav className="sidebarNav" aria-label="Разделы админки">
           {navItems.map((x) => (
             <button
               key={x.key}
+              type="button"
               className={`navItem ${tab === x.key ? "active" : ""}`}
+              aria-current={tab === x.key ? "page" : undefined}
               onClick={() => setTab(x.key)}
             >
               {x.label}
             </button>
           ))}
-        </div>
+        </nav>
 
         <div className="sidebarFooter">
-          <button className="btn danger" onClick={onLogout}>
+          <button type="button" className="btn danger" onClick={onLogout}>
             Выйти
           </button>
         </div>
@@ -99,6 +109,8 @@ export default function Dashboard({ onLogout, notify }) {
           {tab === "catalog" && isSuper && <CatalogManager notify={notify} />}
 
           {tab === "broadcast" && isSuper && <Broadcast notify={notify} />}
+
+          {tab === "operators" && isSuper && <Operators notify={notify} />}
 
           {tab === "shops" && isSuper && <Shops notify={notify} />}
 

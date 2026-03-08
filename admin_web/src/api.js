@@ -35,3 +35,33 @@ export async function api(path, { method="GET", body, token=true } = {}) {
   }
   return data;
 }
+
+export async function apiForm(path, { method = "POST", formData, token = true } = {}) {
+  const headers = {};
+  if (token) {
+    const t = getToken();
+    if (t) headers["Authorization"] = `Bearer ${t}`;
+  }
+
+  const res = await fetch(path, {
+    method,
+    headers,
+    body: formData,
+  });
+
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { raw: text };
+  }
+
+  if (!res.ok) {
+    const msg = data?.detail || data?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+

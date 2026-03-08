@@ -1,9 +1,10 @@
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery, InputMediaPhoto
+from aiogram.types import Message, CallbackQuery
 
 from backend.repositories.shop_page_repository import ShopPageRepository
 from .keyboards import main_menu_kb
+from bot.utils.media_fallback import safe_edit_photo_or_text, safe_answer_photo_or_text
 
 router = Router()
 
@@ -38,19 +39,13 @@ async def start_cmd(
     caption = _build_caption(page, "Главное меню")
     img = page.image if page else None
 
-    if img:
-        await message.answer_photo(
-            photo=img,
-            caption=caption,
-            parse_mode="HTML",
-            reply_markup=main_menu_kb(),
-        )
-    else:
-        await message.answer(
-            text=caption,
-            parse_mode="HTML",
-            reply_markup=main_menu_kb(),
-        )
+    await safe_answer_photo_or_text(
+        message=message,
+        image=img,
+        text=caption,
+        parse_mode="HTML",
+        reply_markup=main_menu_kb(),
+    )
 
 
 @router.callback_query(F.data == "main_menu")
@@ -65,16 +60,12 @@ async def main_menu_clb(
     caption = _build_caption(page, "Главное меню")
     img = page.image if page else None
 
-    if img:
-        await callback.message.edit_media(
-            media=InputMediaPhoto(media=img, caption=caption, parse_mode="HTML"),
-            reply_markup=main_menu_kb(),
-        )
-    else:
-        await callback.message.edit_text(
-            text=caption,
-            parse_mode="HTML",
-            reply_markup=main_menu_kb(),
-        )
+    await safe_edit_photo_or_text(
+        message=callback.message,
+        image=img,
+        text=caption,
+        parse_mode="HTML",
+        reply_markup=main_menu_kb(),
+    )
 
     await callback.answer()

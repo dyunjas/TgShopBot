@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from html import escape
 
 from aiogram import Bot
 from aiogram.types import Message, BufferedInputFile
@@ -36,13 +37,19 @@ async def relay_user_message_to_topic(
     shop_id: int,
     order_id: str,
 ) -> None:
+    user_id = message.from_user.id if message.from_user else 0
+    username = f"@{message.from_user.username}" if (message.from_user and message.from_user.username) else "-"
+    user_header = (
+        f"👤 Пользователь: <code>{user_id}</code> ({escape(username)})\n"
+        f"🧾 Заказ: <code>{escape(order_id)}</code>\n\n"
+    )
 
     try:
         if message.text:
             await drop_bot.send_message(
                 chat_id=group_chat_id,
                 message_thread_id=topic_id,
-                text=(message.text or ""),
+                text=user_header + escape(message.text or ""),
             )
             return
 
@@ -54,7 +61,7 @@ async def relay_user_message_to_topic(
                 chat_id=group_chat_id,
                 message_thread_id=topic_id,
                 photo=inp,
-                caption=caption[:1024],
+                caption=(user_header + escape(caption))[:1024],
             )
             return
 
@@ -66,7 +73,7 @@ async def relay_user_message_to_topic(
                 chat_id=group_chat_id,
                 message_thread_id=topic_id,
                 document=inp,
-                caption=caption[:1024],
+                caption=(user_header + escape(caption))[:1024],
             )
             return
 
@@ -78,7 +85,7 @@ async def relay_user_message_to_topic(
                 chat_id=group_chat_id,
                 message_thread_id=topic_id,
                 video=inp,
-                caption=caption[:1024],
+                caption=(user_header + escape(caption))[:1024],
             )
             return
 
@@ -90,7 +97,7 @@ async def relay_user_message_to_topic(
                 chat_id=group_chat_id,
                 message_thread_id=topic_id,
                 voice=inp,
-                caption=caption[:1024],
+                caption=(user_header + escape(caption))[:1024],
             )
             return
 
@@ -102,7 +109,7 @@ async def relay_user_message_to_topic(
                 chat_id=group_chat_id,
                 message_thread_id=topic_id,
                 audio=inp,
-                caption=caption[:1024],
+                caption=(user_header + escape(caption))[:1024],
             )
             return
 
@@ -117,14 +124,14 @@ async def relay_user_message_to_topic(
             await drop_bot.send_message(
                 chat_id=group_chat_id,
                 message_thread_id=topic_id,
-                text="🧩 Стикер",
+                text=user_header + "🧩 Стикер",
             )
             return
 
         await drop_bot.send_message(
             chat_id=group_chat_id,
             message_thread_id=topic_id,
-            text="⚠️ Неподдерживаемый тип сообщения",
+            text=user_header + "⚠️ Неподдерживаемый тип сообщения",
         )
 
     except (TelegramForbiddenError, TelegramBadRequest) as e:

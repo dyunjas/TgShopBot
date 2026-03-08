@@ -54,59 +54,39 @@ export default function Login({ onAuthed, notify }) {
   }
 
   return (
-    <div className="grid cols2">
-      <div className="card">
-        <div style={{ display: "grid", gap: 6 }}>
-          <h2 style={{ margin: 0 }}>Вход</h2>
-          <div className="small">Мы отправим код в Telegram. Затем введите его здесь.</div>
-        </div>
+    <div className="authWrap">
+      <div className="authCard">
+        <h2 style={{ margin: 0 }}>Вход в админку</h2>
+        <div className="small">Введите Telegram ID и код из бота.</div>
 
-        <div className="hr" />
-
-        {step === "tg" && (
-          <div className="form">
-            <div className="field">
-              <label>Telegram ID</label>
-              <input
-                value={tgId}
-                inputMode="numeric"
-                autoComplete="off"
-                onChange={(e) => setTgId(e.target.value.replace(/[^\d]/g, ""))}
-                onKeyDown={(e) => onEnter(e, requestCode)}
-                placeholder="Пример: 123456789"
-              />
-              <div className="small">ID - это набор цифр. Если не знаете - напишите администратору.</div>
-            </div>
-
-            <div className="row" style={{ justifyContent: "flex-end" }}>
-              <button className="btn ok" disabled={loading || !tgOk} onClick={requestCode}>
-                {loading ? "Отправляем…" : "Получить код"}
-              </button>
-            </div>
+        <div className="form" style={{ marginTop: 12 }}>
+          <div className="field">
+            <label>Telegram ID</label>
+            <input
+              value={tgId}
+              inputMode="numeric"
+              autoComplete="off"
+              onChange={(e) => setTgId(e.target.value.replace(/[^\d]/g, ""))}
+              onKeyDown={(e) => onEnter(e, step === "tg" ? requestCode : verify)}
+              placeholder="123456789"
+            />
           </div>
-        )}
 
-        {step === "code" && (
-          <div className="form">
-            <div className="row">
-              <div className="field" style={{ minWidth: 260 }}>
-                <label>Telegram ID</label>
-                <input value={tgId} disabled />
-              </div>
-
-              <div className="field" style={{ minWidth: 220 }}>
-                <label>Код из Telegram</label>
-                <input
-                  value={code}
-                  autoComplete="one-time-code"
-                  onChange={(e) => setCode(e.target.value.trim())}
-                  onKeyDown={(e) => onEnter(e, verify)}
-                  placeholder="Пример: 123456"
-                />
-              </div>
+          {step === "code" ? (
+            <div className="field">
+              <label>Код</label>
+              <input
+                value={code}
+                autoComplete="one-time-code"
+                onChange={(e) => setCode(e.target.value.trim())}
+                onKeyDown={(e) => onEnter(e, verify)}
+                placeholder="Код из Telegram"
+              />
             </div>
+          ) : null}
 
-            <div className="row" style={{ justifyContent: "space-between" }}>
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            {step === "code" ? (
               <button
                 className="btn ghost"
                 disabled={loading}
@@ -117,30 +97,19 @@ export default function Login({ onAuthed, notify }) {
               >
                 Изменить ID
               </button>
-
-              <button className="btn ok" disabled={loading || !codeOk} onClick={verify}>
-                {loading ? "Проверяем…" : "Войти"}
+            ) : (
+              <span />
+            )}
+            {step === "tg" ? (
+              <button className="btn ok" disabled={loading || !tgOk} onClick={requestCode}>
+                {loading ? "Отправляем..." : "Отправить код"}
               </button>
-            </div>
-
-            <div className="small">
-              Не пришёл код? Проверьте, что вы открыли нужного бота и повторите отправку.
-            </div>
+            ) : (
+              <button className="btn ok" disabled={loading || !codeOk} onClick={verify}>
+                {loading ? "Проверяем..." : "Проверить"}
+              </button>
+            )}
           </div>
-        )}
-      </div>
-
-      <div className="card">
-        <h2 style={{ marginTop: 0 }}>Как войти</h2>
-        <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
-          <li>Введите ваш Telegram ID.</li>
-          <li>Нажмите «Получить код».</li>
-          <li>Откройте Telegram и скопируйте код.</li>
-          <li>Вернитесь сюда и нажмите «Войти».</li>
-        </ol>
-        <div className="hr" />
-        <div className="small">
-          Если доступ не выдан - попросите администратора добавить ваш Telegram ID в список сотрудников.
         </div>
       </div>
     </div>

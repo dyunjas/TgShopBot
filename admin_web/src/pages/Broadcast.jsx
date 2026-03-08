@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
+import ShopSelect from "../components/ShopSelect.jsx";
+import S3ImagePickerField from "../components/S3ImagePickerField.jsx";
+import FancySelect from "../components/FancySelect.jsx";
 
 function Modal({ title, onClose, children }) {
   return (
@@ -199,15 +202,17 @@ export default function Broadcast({ notify }) {
         <div className="hr" />
 
         <div className="grid cols2">
-          <div className="field">
-            <label>ID магазина</label>
-            <input value={shopId} onChange={(e) => setShopId(e.target.value)} placeholder="Пример: 2" />
-          </div>
+          <ShopSelect value={shopId} onChange={setShopId} notify={notify} label="Магазин" showRefresh={false} />
 
-          <div className="field">
-            <label>Ссылка на картинку (обязательно)</label>
-            <input value={photoId} onChange={(e) => setPhotoId(e.target.value)} placeholder="https://..." />
-          </div>
+          <S3ImagePickerField
+            shopId={shopId}
+            entity="items"
+            value={photoId}
+            onChange={setPhotoId}
+            notify={notify}
+            label="Картинка для рассылки (обязательно)"
+            placeholder="https://..."
+          />
 
           <div className="field" style={{ gridColumn: "1 / -1" }}>
             <label>Текст</label>
@@ -222,11 +227,15 @@ export default function Broadcast({ notify }) {
           <div className="form">
             <div className="field">
               <label>Режим</label>
-              <select value={mode} onChange={(e) => setMode(e.target.value)}>
-                <option value="all">Все</option>
-                <option value="by_ids">По ID Telegram</option>
-                <option value="segment">Доп. опции</option>
-              </select>
+              <FancySelect
+                value={mode}
+                onChange={setMode}
+                options={[
+                  { value: "all", label: "Все" },
+                  { value: "by_ids", label: "По ID Telegram" },
+                  { value: "segment", label: "Доп. опции" },
+                ]}
+              />
             </div>
 
             {mode === "by_ids" && (
@@ -270,12 +279,16 @@ export default function Broadcast({ notify }) {
             />
 
             <div className="small">Кнопок в ряд</div>
-            <select value={buttonsPerRow} onChange={(e) => setButtonsPerRow(e.target.value)}>
-              <option value={1}>1</option>
-              <option value={2}>2</option>
-              <option value={3}>3</option>
-              <option value={4}>4</option>
-            </select>
+            <FancySelect
+              value={buttonsPerRow}
+              onChange={setButtonsPerRow}
+              options={[
+                { value: 1, label: "1" },
+                { value: 2, label: "2" },
+                { value: 3, label: "3" },
+                { value: 4, label: "4" },
+              ]}
+            />
           </div>
 
           <div className="hr" />
@@ -358,7 +371,11 @@ export default function Broadcast({ notify }) {
 
                 <div className="hr" />
 
-                <div className="list">
+                <div className="small" style={{ marginBottom: 8 }}>
+                  Найдено: {categories.length}
+                </div>
+
+                <div className="list broadcastPickerList">
                   {categories.map((c) => (
                     <div
                       key={c.id}
@@ -406,7 +423,11 @@ export default function Broadcast({ notify }) {
 
                 <div className="hr" />
 
-                <div className="list">
+                <div className="small" style={{ marginBottom: 8 }}>
+                  Найдено: {items.length}
+                </div>
+
+                <div className="list broadcastPickerList">
                   {items.map((it) => (
                     <div
                       key={it.id}

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InputMediaPhoto
+from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 from backend.states import PaymentStates
@@ -12,6 +12,7 @@ from backend.repositories.user_repository import ShopUserRepository
 from backend.repositories.transaction_repository import ShopTransactionRepository
 from backend.repositories.shop_page_repository import ShopPageRepository
 from backend.core.logger_config import logger
+from bot.utils.media_fallback import safe_answer_photo_or_text, safe_edit_photo_or_text
 
 from .keyboards import back_profile_kb, payment_menu_kb
 
@@ -99,61 +100,28 @@ async def pay_lava_clb(
     text = _caption(page, fallback)
     image = page.image if page else None
 
+    kb = payment_menu_kb(
+        invoice_url=invoice_url,
+        invoice_id=str(invoice_id),
+        check_prefix="check_payment_lava",
+    )
     try:
-        if image:
-            content = InputMediaPhoto(media=image, caption=text, parse_mode="HTML")
-            await callback.message.edit_media(
-                media=content,
-                reply_markup=payment_menu_kb(
-                    invoice_url=invoice_url,
-                    invoice_id=str(invoice_id),
-                    check_prefix="check_payment_lava",
-                ),
-            )
-        else:
-            try:
-                await callback.message.edit_caption(
-                    caption=text,
-                    parse_mode="HTML",
-                    reply_markup=payment_menu_kb(
-                        invoice_url=invoice_url,
-                        invoice_id=str(invoice_id),
-                        check_prefix="check_payment_lava",
-                    ),
-                )
-            except Exception:
-                await callback.message.edit_text(
-                    text=text,
-                    parse_mode="HTML",
-                    reply_markup=payment_menu_kb(
-                        invoice_url=invoice_url,
-                        invoice_id=str(invoice_id),
-                        check_prefix="check_payment_lava",
-                    ),
-                )
+        await safe_edit_photo_or_text(
+            message=callback.message,
+            image=image,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
     except Exception as e:
-        logger.warning(f"[LAVA] edit failed, sending new: {e}")
-        if image:
-            await callback.message.answer_photo(
-                photo=image,
-                caption=text,
-                parse_mode="HTML",
-                reply_markup=payment_menu_kb(
-                    invoice_url=invoice_url,
-                    invoice_id=str(invoice_id),
-                    check_prefix="check_payment_lava",
-                ),
-            )
-        else:
-            await callback.message.answer(
-                text,
-                parse_mode="HTML",
-                reply_markup=payment_menu_kb(
-                    invoice_url=invoice_url,
-                    invoice_id=str(invoice_id),
-                    check_prefix="check_payment_lava",
-                ),
-            )
+        logger.warning(f"[LAVA] safe edit failed, sending new: {e}")
+        await safe_answer_photo_or_text(
+            message=callback.message,
+            image=image,
+            text=text,
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
 
     await state.update_data(order_id=order_id, invoice_id=str(invoice_id), provider="lava")
     await callback.answer()
@@ -199,20 +167,22 @@ async def check_lava_payment_clb(
         image = page.image if page else None
 
         try:
-            if image:
-                content = InputMediaPhoto(media=image, caption=text, parse_mode="HTML")
-                await callback.message.edit_media(media=content, reply_markup=back_profile_kb())
-            else:
-                try:
-                    await callback.message.edit_caption(caption=text, parse_mode="HTML", reply_markup=back_profile_kb())
-                except Exception:
-                    await callback.message.edit_text(text=text, parse_mode="HTML", reply_markup=back_profile_kb())
+            await safe_edit_photo_or_text(
+                message=callback.message,
+                image=image,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=back_profile_kb(),
+            )
         except Exception as e:
-            logger.warning(f"[LAVA] success edit failed, sending new: {e}")
-            if image:
-                await callback.message.answer_photo(photo=image, caption=text, parse_mode="HTML", reply_markup=back_profile_kb())
-            else:
-                await callback.message.answer(text, parse_mode="HTML", reply_markup=back_profile_kb())
+            logger.warning(f"[LAVA] success safe edit failed, sending new: {e}")
+            await safe_answer_photo_or_text(
+                message=callback.message,
+                image=image,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=back_profile_kb(),
+            )
 
         logger.info(f"[LAVA] Payment OK shop_id={shop_id} tg_id={tg_id} invoice_id={invoice_id} amount={tx.amount}")
 

@@ -1,0 +1,23 @@
+<svg width="360" height="120" viewBox="0 0 360 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bag" x1="60" y1="18" x2="140" y2="102" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFC24A"/>
+      <stop offset="0.5" stop-color="#FF7A4A"/>
+      <stop offset="1" stop-color="#E92B71"/>
+    </linearGradient>
+    <linearGradient id="word" x1="152" y1="42" x2="334" y2="92" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B194F"/>
+      <stop offset="1" stop-color="#E92B71"/>
+    </linearGradient>
+  </defs>
+  <path d="M52 40C54 33 60 28 67 28H131C138 28 144 33 146 40L156 82C158 90 152 98 144 98H54C46 98 40 90 42 82L52 40Z" fill="url(#bag)" stroke="#1B194F" stroke-width="5"/>
+  <path d="M74 34C74 22 84 13 96 13C108 13 118 22 118 34" stroke="#1B194F" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="74" cy="36" r="5" fill="#1B194F"/>
+  <circle cx="118" cy="36" r="5" fill="#1B194F"/>
+  <path d="M66 79L74 50H88C95 50 100 55 99 63C98 71 91 76 83 76H75L72 89H66ZM79 71H83C87 71 91 68 91 63C91 59 89 56 85 56H80L79 71Z" fill="white"/>
+  <path d="M92 89L100 50H113C121 50 126 55 125 64C123 75 115 82 105 82H99L98 89H92ZM101 76H105C111 76 116 72 117 65C118 59 115 56 110 56H106L101 76Z" fill="white"/>
+  <path d="M166 76V44H186C200 44 209 51 209 63C209 75 200 82 186 82H166V76ZM176 73H186C194 73 199 69 199 63C199 57 194 53 186 53H176V73Z" fill="url(#word)"/>
+  <path d="M212 82V44H232C246 44 254 51 254 62C254 73 246 80 232 80H221V82H212ZM221 72H231C239 72 244 69 244 62C244 56 239 53 231 53H221V72Z" fill="url(#word)"/>
+  <path d="M259 82L274 44H286L301 82H291L287 72H272L268 82H259ZM274 64H285L280 51H279L274 64Z" fill="url(#word)"/>
+  <path d="M303 82V44H312V60H313L327 44H339L322 63L340 82H328L314 67H312V82H303Z" fill="url(#word)"/>
+</svg>

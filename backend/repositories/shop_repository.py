@@ -1,116 +1,62 @@
 from __future__ import annotations
 
-from enum import Enum
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from ..database.models import ShopCategory, ShopItem, Shop
-
-
-class DeleteCategoryResult(str, Enum):
-    OK = "ok"
-    NOT_FOUND = "not_found"
-    HAS_ITEMS = "has_items"
-    HAS_SUBCATEGORIES = "has_subcategories"
+from .category_repository import CategoryRepository, DeleteCategoryResult, UNSET
+from .item_repository import ItemRepository
+from .shop_read_repository import ShopReadRepository
 
 
 class ShopRepository:
+    """Backward-compatible facade used by bot handlers.
+
+    New code should use specialized repositories + services.
+    """
+
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.shops = ShopReadRepository(session)
+        self.categories = CategoryRepository(session)
+        self.items = ItemRepository(session)
 
-    async def get_categories(self, *, shop_id: int, parent_id: int | None = None) -> list[ShopCategory]:
-        stmt = (
-            select(ShopCategory)
-            .options(selectinload(ShopCategory.parent))
-            .where(
-                ShopCategory.shop_id == shop_id,
-                ShopCategory.parent_id == parent_id,
-            )
-        )
-        result = await self.session.execute(stmt)
-        return result.scalars().all()
+    async def get_categories(self, *, shop_id: int, parent_id: int | None = None):
+        return await self.categories.list(shop_id=shop_id, parent_id=parent_id)
 
-    async def get_all_categories(self, *, shop_id: int) -> list[ShopCategory]:
-        stmt = (
-            select(ShopCategory)
-            .options(
-                selectinload(ShopCategory.subcategories),
-                selectinload(ShopCategory.parent),
-            )
-            .where(ShopCategory.shop_id == shop_id)
-        )
-        result = await self.session.execute(stmt)
-        return result.scalars().all()
+    async def get_all_categories(self, *, shop_id: int):
+        roots = await self.categories.list(shop_id=shop_id, parent_id=None)
+        all_categories = list(roots)
+        queue = [c.id for c in roots]
 
-    async def get_subcategories(self, *, shop_id: int) -> list[ShopCategory]:
-        stmt = (
-            select(ShopCategory)
-            .options(selectinload(ShopCategory.parent))
-            .where(
-                ShopCategory.shop_id == shop_id,
-                ShopCategory.parent_id.isnot(None),
-            )
-        )
-        result = await self.session.execute(stmt)
-        return result.scalars().all()
+        while queue:
+            current_parent = queue.pop(0)
+            children = await self.categories.list(shop_id=shop_id, parent_id=current_parent)
+            all_categories.extend(children)
+            queue.extend(c.id for c in children)
 
-    async def get_category_by_id(self, *, shop_id: int, category_id: int) -> ShopCategory | None:
-        stmt = select(ShopCategory).where(
-            ShopCategory.shop_id == shop_id,
-            ShopCategory.id == category_id,
-        )
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        return all_categories
 
-    async def get_items(self, *, shop_id: int) -> list[ShopItem]:
-        stmt = (
-            select(ShopItem)
-            .options(selectinload(ShopItem.category).selectinload(ShopCategory.parent))
-            .where(ShopItem.shop_id == shop_id)
-        )
-        result = await self.session.execute(stmt)
-        return result.scalars().all()
+    async def get_subcategories(self, *, shop_id: int):
+        all_categories = await self.get_all_categories(shop_id=shop_id)
+        return [c for c in all_categories if c.parent_id is not None]
 
-    async def get_items_by_category(self, *, shop_id: int, category_id: int) -> list[ShopItem]:
-        stmt = select(ShopItem).where(
-            ShopItem.shop_id == shop_id,
-            ShopItem.category_id == category_id,
-        )
-        result = await self.session.execute(stmt)
-        return result.scalars().all()
+    async def get_category_by_id(self, *, shop_id: int, category_id: int):
+        return await self.categories.get_by_id(shop_id=shop_id, category_id=category_id)
 
-    async def get_item_by_id(self, *, shop_id: int, item_id: int) -> ShopItem | None:
-        stmt = select(ShopItem).where(
-            ShopItem.shop_id == shop_id,
-            ShopItem.id == item_id,
-        )
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+    async def get_items(self, *, shop_id: int):
+        return await self.items.list(shop_id=shop_id)
 
-    async def create_category(
-        self,
-        *,
-        shop_id: int,
-        title: str,
-        img: str,
-        parent_id: int | None = None,
-    ) -> ShopCategory:
+    async def get_items_by_category(self, *, shop_id: int, category_id: int):
+        return await self.items.list(shop_id=shop_id, category_id=category_id)
+
+    async def get_item_by_id(self, *, shop_id: int, item_id: int):
+        return await self.items.get_by_id(shop_id=shop_id, item_id=item_id)
+
+    async def create_category(self, *, shop_id: int, title: str, img: str, parent_id: int | None = None):
         if parent_id is not None:
             parent = await self.get_category_by_id(shop_id=shop_id, category_id=parent_id)
             if not parent:
                 raise ValueError("Parent category not found in this shop")
-
-        category = ShopCategory(
-            shop_id=shop_id,
-            title=title,
-            img=img,
-            parent_id=parent_id,
-        )
-        self.session.add(category)
-        await self.session.flush()
-        await self.session.refresh(category)
-        return category
+        return await self.categories.create(shop_id=shop_id, title=title, img=img, parent_id=parent_id)
 
     async def create_item(
         self,
@@ -121,7 +67,7 @@ class ShopRepository:
         description: str | None,
         img: str,
         category_id: int,
-    ) -> ShopItem:
+    ):
         if price < 0:
             raise ValueError("Price must be non-negative")
 
@@ -129,7 +75,7 @@ class ShopRepository:
         if not category:
             raise ValueError("Category not found in this shop")
 
-        item = ShopItem(
+        return await self.items.create(
             shop_id=shop_id,
             title=title,
             price=price,
@@ -137,10 +83,6 @@ class ShopRepository:
             img=img,
             category_id=category_id,
         )
-        self.session.add(item)
-        await self.session.flush()
-        await self.session.refresh(item)
-        return item
 
     async def update_category(
         self,
@@ -149,33 +91,28 @@ class ShopRepository:
         category_id: int,
         title: str | None = None,
         img: str | None = None,
-        parent_id: int | None = None,
-    ) -> ShopCategory | None:
-        stmt = select(ShopCategory).where(
-            ShopCategory.shop_id == shop_id,
-            ShopCategory.id == category_id,
-        )
-        category = (await self.session.execute(stmt)).scalar_one_or_none()
+        parent_id: int | None | object = UNSET,
+    ):
+        category = await self.get_category_by_id(shop_id=shop_id, category_id=category_id)
         if not category:
             return None
 
-        if parent_id is not None:
+        if parent_id is not UNSET:
             if parent_id == category.id:
                 raise ValueError("Category cannot be parent of itself")
 
-            parent = await self.get_category_by_id(shop_id=shop_id, category_id=parent_id)
-            if not parent:
-                raise ValueError("Parent category not found in this shop")
-            category.parent_id = parent_id
+            if parent_id is not None:
+                parent = await self.get_category_by_id(shop_id=shop_id, category_id=parent_id)
+                if not parent:
+                    raise ValueError("Parent category not found in this shop")
 
-        if title is not None:
-            category.title = title
-        if img is not None:
-            category.img = img
-
-        await self.session.flush()
-        await self.session.refresh(category)
-        return category
+        return await self.categories.update(
+            shop_id=shop_id,
+            category_id=category_id,
+            title=title if title is not None else UNSET,
+            img=img if img is not None else UNSET,
+            parent_id=parent_id,
+        )
 
     async def update_item(
         self,
@@ -184,91 +121,53 @@ class ShopRepository:
         item_id: int,
         title: str | None = None,
         price: int | None = None,
-        description: str | None = None,
+        description: str | None | object = UNSET,
         img: str | None = None,
         category_id: int | None = None,
-    ) -> ShopItem | None:
-        stmt = select(ShopItem).where(
-            ShopItem.shop_id == shop_id,
-            ShopItem.id == item_id,
-        )
-        item = (await self.session.execute(stmt)).scalar_one_or_none()
+    ):
+        item = await self.get_item_by_id(shop_id=shop_id, item_id=item_id)
         if not item:
             return None
 
-        if title is not None:
-            item.title = title
-
-        if price is not None:
-            if not isinstance(price, int) or price < 0:
-                raise ValueError("Price must be a non-negative integer")
-            item.price = price
-
-        if description is not None:
-            item.description = description
-
-        if img is not None:
-            item.img = img
+        if price is not None and price < 0:
+            raise ValueError("Price must be a non-negative integer")
 
         if category_id is not None:
             category = await self.get_category_by_id(shop_id=shop_id, category_id=category_id)
             if not category:
                 raise ValueError("Category not found in this shop")
-            item.category_id = category_id
 
-        await self.session.flush()
-        await self.session.refresh(item)
-        return item
+        return await self.items.update(
+            shop_id=shop_id,
+            item_id=item_id,
+            title=title if title is not None else UNSET,
+            price=price if price is not None else UNSET,
+            description=description,
+            img=img if img is not None else UNSET,
+            category_id=category_id if category_id is not None else UNSET,
+        )
 
     async def delete_item(self, *, shop_id: int, item_id: int) -> bool:
-        stmt = select(ShopItem).where(
-            ShopItem.shop_id == shop_id,
-            ShopItem.id == item_id,
-        )
-        item = (await self.session.execute(stmt)).scalar_one_or_none()
+        item = await self.get_item_by_id(shop_id=shop_id, item_id=item_id)
         if not item:
             return False
-
-        await self.session.delete(item)
-        await self.session.flush()
+        await self.items.delete(item)
         return True
 
     async def delete_category(self, *, shop_id: int, category_id: int) -> DeleteCategoryResult:
-        stmt = select(ShopCategory).where(
-            ShopCategory.shop_id == shop_id,
-            ShopCategory.id == category_id,
-        )
-        category = (await self.session.execute(stmt)).scalar_one_or_none()
+        category = await self.get_category_by_id(shop_id=shop_id, category_id=category_id)
         if not category:
             return DeleteCategoryResult.NOT_FOUND
 
-        has_item = await self.session.scalar(
-            select(ShopItem.id)
-            .where(ShopItem.shop_id == shop_id, ShopItem.category_id == category_id)
-            .limit(1)
-        )
-        if has_item:
+        if await self.categories.has_items(shop_id=shop_id, category_id=category_id):
             return DeleteCategoryResult.HAS_ITEMS
 
-        has_child = await self.session.scalar(
-            select(ShopCategory.id)
-            .where(ShopCategory.shop_id == shop_id, ShopCategory.parent_id == category_id)
-            .limit(1)
-        )
-        if has_child:
+        if await self.categories.has_children(shop_id=shop_id, category_id=category_id):
             return DeleteCategoryResult.HAS_SUBCATEGORIES
 
-        await self.session.delete(category)
-        await self.session.flush()
+        await self.categories.delete(category)
         return DeleteCategoryResult.OK
 
-    async def get_shop_by_id(self, shop_id: int) -> Shop | None:
-        stmt = (
-            select(Shop)
-            .where(Shop.id == shop_id)
-            .options(
-                selectinload(Shop.payment_configs), 
-                selectinload(Shop.ui_assets), 
-            )
-        )
-        return await self.session.scalar(stmt)
+    async def get_shop_by_id(self, shop_id: int):
+        return await self.shops.get_by_id(shop_id=shop_id)
+

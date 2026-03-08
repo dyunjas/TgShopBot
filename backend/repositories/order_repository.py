@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database.models import ShopOrder, ShopUser, AdminUser
+from backend.core.logger_config import logger
 
 
 def generate_order_id(order_db_id: int) -> str:
@@ -51,6 +52,11 @@ class ShopOrderRepository:
 
         await self.session.commit()
         await self.session.refresh(order)
+        logger.info(
+            f"[ORDER] created shop_id={shop_id} order_id={order.order_id} "
+            f"order_db_id={order.id} tg_id={tg_id} user_id={user_id} "
+            f"title='{title}' price={price} status={order.status}"
+        )
         return order
 
     async def get_orders(self, *, shop_id: int, tg_id: int) -> list[ShopOrder]:
@@ -160,6 +166,10 @@ class ShopOrderRepository:
         await self.session.flush()
         await self.session.commit()
         await self.session.refresh(order)
+        logger.info(
+            f"[ORDER] taken shop_id={shop_id} order_id={order_id} "
+            f"executor_admin_id={executor_admin_id} executor_name='{executor_name}' status={order.status}"
+        )
         return order
 
     async def set_status(self, *, shop_id: int, order_id: str, status: str) -> None:
@@ -174,9 +184,14 @@ class ShopOrderRepository:
         order = (await self.session.execute(stmt)).scalar_one_or_none()
         if not order:
             return
+        prev_status = order.status
         order.status = status
         await self.session.flush()
         await self.session.commit()
+        logger.info(
+            f"[ORDER] status_changed shop_id={shop_id} order_id={order_id} "
+            f"from={prev_status} to={status}"
+        )
 
     async def set_review(self, *, shop_id: int, order_id: str, rating: int, review_text: str) -> None:
         stmt = (

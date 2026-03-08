@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -47,33 +47,16 @@ async def load_active_fingerprint() -> Dict[int, Tuple[str, str]]:
         shops = res.scalars().all()
 
     fp: Dict[int, Tuple[str, str]] = {}
+    drop_token = (settings.DROP_BOT_TOKEN or "").strip()
     for s in shops:
         token = (s.bot_token or "").strip()
         if not token:
             continue
+        if drop_token and token == drop_token:
+            logger.warning(f"[SHOPS] shop_id={int(s.id)} uses DROP_BOT_TOKEN, skipping from shops polling")
+            continue
         fp[int(s.id)] = (token, (s.title or "").strip())
     return fp
-
-
-async def build_bots_and_mapping(fp: Dict[int, Tuple[str, str]]) -> tuple[list[Bot], dict[int, ShopInfo]]:
-
-    bots: list[Bot] = []
-    bot_id_to_shop: dict[int, ShopInfo] = {}
-
-    for shop_id, (token, title) in fp.items():
-        bot = make_bot(token)
-        try:
-            me = await bot.get_me()
-        except Exception:
-            with suppress(Exception):
-                await bot.session.close()
-            logger.exception(f"[SHOPS] bad token for shop_id={shop_id} (cannot get_me)")
-            continue
-
-        bots.append(bot)
-        bot_id_to_shop[int(me.id)] = ShopInfo(id=int(shop_id), title=title or None)
-
-    return bots, bot_id_to_shop
 
 
 async def start_drop_polling(drop_bot: Bot):
@@ -90,69 +73,138 @@ async def start_drop_polling(drop_bot: Bot):
 
 
 @dataclass
+class ShopPollingEntry:
+    shop_id: int
+    token: str
+    title: str
+    bot: Bot
+    bot_id: int
+    task: asyncio.Task
+
+
+@dataclass
 class ShopsRuntime:
     dp: Dispatcher
     bot_id_to_shop: Dict[int, ShopInfo]
-    bots: List[Bot]
-    polling_task: Optional[asyncio.Task]
+    entries: Dict[int, ShopPollingEntry]
 
 
-async def start_shops_polling(rt: ShopsRuntime, bots: list[Bot], mapping: dict[int, ShopInfo]) -> None:
-    rt.bot_id_to_shop.clear()
-    rt.bot_id_to_shop.update(mapping)
+def _make_shop_dispatcher(bot_id_to_shop: Dict[int, ShopInfo]) -> Dispatcher:
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.update.middleware(DBSessionMiddleware())
+    dp.update.middleware(ShopContextMiddleware(bot_id_to_shop))
+    dp.update.middleware(UserUpdateMiddleware())
+    dp.include_router(bot_router)
+    return dp
 
-    rt.bots = bots
 
-    for b in bots:
+async def _start_shop_polling(rt: ShopsRuntime, *, shop_id: int, token: str, title: str) -> None:
+    bot = make_bot(token)
+    try:
+        me = await bot.get_me()
+    except Exception:
         with suppress(Exception):
-            await b.delete_webhook(drop_pending_updates=True)
+            await bot.session.close()
+        logger.exception(f"[SHOPS] bad token for shop_id={shop_id} (cannot get_me)")
+        return
+
+    bot_id = int(me.id)
+    if bot_id in rt.bot_id_to_shop:
+        with suppress(Exception):
+            await bot.session.close()
+        logger.warning(f"[SHOPS] bot id={bot_id} already running, skip shop_id={shop_id}")
+        return
+
+    rt.bot_id_to_shop[bot_id] = ShopInfo(id=shop_id, title=title or None)
+
+    with suppress(Exception):
+        await bot.delete_webhook(drop_pending_updates=True)
 
     async def _run():
-        logger.info(f"[SHOPS] polling started for {len(bots)} bots")
+        logger.info(f"[SHOPS] polling started shop_id={shop_id} bot_id={bot_id} title='{title}'")
         try:
-            await rt.dp.start_polling(*bots)
+            await rt.dp._polling(bot)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception(f"[SHOPS] polling crashed shop_id={shop_id} bot_id={bot_id}")
         finally:
-            logger.info("[SHOPS] polling stopped")
+            logger.info(f"[SHOPS] polling stopped shop_id={shop_id} bot_id={bot_id}")
 
-    rt.polling_task = asyncio.create_task(_run(), name="shops:polling")
+    task = asyncio.create_task(_run(), name=f"shop:{shop_id}")
+    rt.entries[shop_id] = ShopPollingEntry(
+        shop_id=shop_id,
+        token=token,
+        title=title,
+        bot=bot,
+        bot_id=bot_id,
+        task=task,
+    )
 
 
-async def stop_shops_polling(rt: ShopsRuntime) -> None:
-    try:
-        await rt.dp.stop_polling()
-    except Exception:
-        pass
+async def _stop_shop_polling(rt: ShopsRuntime, *, shop_id: int, reason: str) -> None:
+    entry = rt.entries.pop(shop_id, None)
+    if not entry:
+        return
 
-    if rt.polling_task:
-        rt.polling_task.cancel()
-        with suppress(Exception):
-            await rt.polling_task
-        rt.polling_task = None
+    entry.task.cancel()
+    with suppress(Exception):
+        await entry.task
 
-    for b in rt.bots:
-        with suppress(Exception):
-            await b.session.close()
+    with suppress(Exception):
+        await entry.bot.session.close()
 
-    rt.bots = []
+    rt.bot_id_to_shop.pop(entry.bot_id, None)
+    logger.info(f"[SHOPS] shop stopped shop_id={shop_id} bot_id={entry.bot_id} reason={reason}")
+
+
+async def _sync_shops_polling(rt: ShopsRuntime, fp: Dict[int, Tuple[str, str]]) -> None:
+    desired = {int(shop_id): ((token or "").strip(), (title or "").strip()) for shop_id, (token, title) in fp.items()}
+    seen_tokens: set[str] = set()
+    filtered: Dict[int, Tuple[str, str]] = {}
+    for shop_id, (token, title) in desired.items():
+        if not token:
+            continue
+        if token in seen_tokens:
+            logger.warning(f"[SHOPS] duplicate bot token detected for shop_id={shop_id}, skipping")
+            continue
+        seen_tokens.add(token)
+        filtered[shop_id] = (token, title)
+
+    current_ids = set(rt.entries.keys())
+    desired_ids = set(filtered.keys())
+
+    for shop_id in sorted(current_ids - desired_ids):
+        await _stop_shop_polling(rt, shop_id=shop_id, reason="deactivated_or_deleted")
+
+    for shop_id in sorted(desired_ids):
+        token, title = filtered[shop_id]
+        entry = rt.entries.get(shop_id)
+        if not entry:
+            await _start_shop_polling(rt, shop_id=shop_id, token=token, title=title)
+            continue
+
+        if entry.token != token or entry.title != title:
+            await _stop_shop_polling(rt, shop_id=shop_id, reason="token_or_title_changed")
+            await _start_shop_polling(rt, shop_id=shop_id, token=token, title=title)
+
+
+async def _stop_all_shops_polling(rt: ShopsRuntime) -> None:
+    for shop_id in list(rt.entries.keys()):
+        await _stop_shop_polling(rt, shop_id=shop_id, reason="shutdown")
     rt.bot_id_to_shop.clear()
 
 
 async def shops_supervisor_loop(interval: float = 2.0, debounce_sec: float = 2.0):
-
     bot_id_to_shop: Dict[int, ShopInfo] = {}
-
-    dp = Dispatcher(storage=MemoryStorage())
-    dp.update.middleware(DBSessionMiddleware())
-    dp.update.middleware(ShopContextMiddleware(bot_id_to_shop)) 
-    dp.update.middleware(UserUpdateMiddleware())
-    dp.include_router(bot_router)
-
-    rt = ShopsRuntime(dp=dp, bot_id_to_shop=bot_id_to_shop, bots=[], polling_task=None)
+    rt = ShopsRuntime(
+        dp=_make_shop_dispatcher(bot_id_to_shop),
+        bot_id_to_shop=bot_id_to_shop,
+        entries={},
+    )
 
     last_fp: Dict[int, Tuple[str, str]] = await load_active_fingerprint()
-
-    bots, mapping = await build_bots_and_mapping(last_fp)
-    await start_shops_polling(rt, bots, mapping)
+    await _sync_shops_polling(rt, last_fp)
 
     pending_restart_at: float | None = None
 
@@ -171,17 +223,15 @@ async def shops_supervisor_loop(interval: float = 2.0, debounce_sec: float = 2.0
                 now = asyncio.get_running_loop().time()
                 if now >= pending_restart_at:
                     pending_restart_at = None
-                    logger.info("[SHOPS] applying changes (debounced restart)")
-
-                    await stop_shops_polling(rt)
-
-                    bots2, mapping2 = await build_bots_and_mapping(last_fp)
-                    await start_shops_polling(rt, bots2, mapping2)
+                    logger.info("[SHOPS] applying changes (debounced incremental sync)")
+                    await _sync_shops_polling(rt, last_fp)
 
         except asyncio.CancelledError:
             break
         except Exception:
             logger.exception("[SHOPS] supervisor crashed")
+
+    await _stop_all_shops_polling(rt)
 
 
 async def main():

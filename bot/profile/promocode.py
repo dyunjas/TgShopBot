@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InputMediaPhoto
+from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 from backend.states import PromocodeStates
@@ -8,6 +8,7 @@ from backend.repositories.user_repository import ShopUserRepository
 from backend.repositories.shop_page_repository import ShopPageRepository
 
 from .keyboards import promocode_kb, back_promocode_kb
+from bot.utils.media_fallback import safe_edit_photo_or_text, safe_answer_photo_or_text
 
 router = Router()
 
@@ -43,21 +44,24 @@ def _caption(page, fallback: str, values: dict[str, object] | None = None) -> st
 
 async def _edit_photo_or_text(callback: CallbackQuery, *, page, caption: str, kb):
     image = page.image if page else None
-    if image:
-        await callback.message.edit_media(
-            media=InputMediaPhoto(media=image, caption=caption, parse_mode="HTML"),
-            reply_markup=kb,
-        )
-    else:
-        await callback.message.edit_text(caption, parse_mode="HTML", reply_markup=kb)
+    await safe_edit_photo_or_text(
+        message=callback.message,
+        image=image,
+        text=caption,
+        parse_mode="HTML",
+        reply_markup=kb,
+    )
 
 
 async def _send_page_photo_or_text(message: Message, *, page, caption: str, kb):
     image = page.image if page else None
-    if image:
-        await message.answer_photo(photo=image, caption=caption, parse_mode="HTML", reply_markup=kb)
-    else:
-        await message.answer(caption, parse_mode="HTML", reply_markup=kb)
+    await safe_answer_photo_or_text(
+        message=message,
+        image=image,
+        text=caption,
+        parse_mode="HTML",
+        reply_markup=kb,
+    )
 
 
 @router.callback_query(F.data == "enter_promocode")

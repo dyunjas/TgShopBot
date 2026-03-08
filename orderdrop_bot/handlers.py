@@ -1,4 +1,5 @@
 from __future__ import annotations
+from html import escape
 
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
@@ -57,6 +58,10 @@ async def order_take_clb(
     admin = await admin_repo.ensure_admin(callback.from_user.id)
     if not admin:
         return await callback.answer("Сотрудник не найден", show_alert=True)
+    logger.info(
+        f"[ORDER] take_requested shop_id={shop_id} order_id={order_id} "
+        f"admin_tg_id={callback.from_user.id} admin_id={getattr(admin, 'id', None)}"
+    )
 
     order = await order_repo.take_order(
         shop_id=shop_id,
@@ -66,6 +71,10 @@ async def order_take_clb(
     )
     if not order:
         return await callback.answer("Заказ уже взят или не найден", show_alert=True)
+    logger.info(
+        f"[ORDER] taken_by_operator shop_id={shop_id} order_id={order_id} "
+        f"executor_admin_id={order.executor_admin_id} executor_name='{order.executor_name}'"
+    )
 
     try:
         await callback.message.edit_reply_markup(reply_markup=order_in_work_kb(shop_id, order_id))
@@ -91,8 +100,8 @@ async def order_take_clb(
                     chat_id=user_tg_id,
                     text=(
                         "<b>Заказ принят</b>\n\n"
-                        f"Заказ <b>{order_id}</b> принят сотрудником <b>{admin.username or 'Сотрудник'}</b>\n\n"
-                        f"Товар: {order.title}\n\n"
+                        f"Заказ <b>{escape(order_id)}</b> принят сотрудником <b>{escape(admin.username or 'Сотрудник')}</b>\n\n"
+                        f"Товар: {escape(order.title)}\n\n"
                         "💬 Чтобы написать сотруднику - нажмите на кнопку ниже. "
                         "После выполнения заказа, вы получите уведомление."
                     ),
@@ -153,7 +162,13 @@ async def forward_executor_to_user(
         shop_id=order.shop_id,
         user_tg_id=user_tg_id,
         message=message,
-        order_id=order.order_id,  
+        order_id=order.order_id,
+        operator_name=getattr(order, "executor_name", None),
+    )
+    logger.info(
+        f"[ORDER] operator_message_forwarded shop_id={order.shop_id} order_id={order.order_id} "
+        f"operator_tg_id={message.from_user.id} user_tg_id={user_tg_id} "
+        f"msg_id={message.message_id} thread_id={message.message_thread_id}"
     )
 
 
@@ -202,6 +217,10 @@ async def order_done_confirm_clb(
 
     await order_repo.set_status(shop_id=shop_id, order_id=order_id, status="done")
     await admin_repo.increase_balance(callback.from_user.id, REWARD_RUB)
+    logger.info(
+        f"[ORDER] done_confirmed shop_id={shop_id} order_id={order_id} "
+        f"executor_tg_id={callback.from_user.id} reward={REWARD_RUB}"
+    )
 
     user_tg_id = await _get_user_tg_id_safe(order_repo, shop_id, order_id, order_obj=order)
     if user_tg_id:
@@ -220,7 +239,7 @@ async def order_done_confirm_clb(
                     chat_id=user_tg_id,
                     text=(
                         "<b>Заказ выполнен</b>\n\n"
-                        f"Заказ <b>{order_id}</b> - <b>{order.title}</b> был выполнен.\n\n"
+                        f"Заказ <b>{escape(order_id)}</b> - <b>{escape(order.title)}</b> был выполнен.\n\n"
                         "Оставьте отзыв по кнопке ниже ❤️"
                     ),
                     reply_markup=rate_kb(shop_id, order_id)
@@ -291,6 +310,10 @@ async def order_refund_confirm_clb(
 
     await user_repo.increase_balance(shop_id=order.shop_id, tg_id=user_tg_id, amount=order.price)
     await order_repo.set_status(shop_id=shop_id, order_id=order_id, status="refunded")
+    logger.info(
+        f"[ORDER] refunded shop_id={shop_id} order_id={order_id} "
+        f"executor_tg_id={callback.from_user.id} user_tg_id={user_tg_id} amount={order.price}"
+    )
 
     shop = await shop_repo.get_shop_by_id(shop_id=shop_id)
     if shop and getattr(shop, "bot_token", None):
@@ -307,7 +330,7 @@ async def order_refund_confirm_clb(
                 chat_id=user_tg_id,
                 text=(
                     "<b>Возврат выполнен</b>\n\n"
-                    f"По заказу <b>{order_id}</b> оформлен возврат.\n"
+                    f"По заказу <b>{escape(order_id)}</b> оформлен возврат.\n"
                     f"Сумма <b>{order.price}</b> руб. возвращена на ваш баланс.\n\n"
                     "Если остались вопросы - напишите в поддержку."
                 ),

@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int
 
     JWT_SECRET: str
+    S3_ENDPOINT_URL: str | None = None
+    S3_REGION: str | None = None
+    S3_ACCESS_KEY_ID: str | None = None
+    S3_SECRET_ACCESS_KEY: str | None = None
+    S3_BUCKET_NAME: str | None = None
+    S3_PUBLIC_BASE_URL: str | None = None
+    S3_MEDIA_PREFIX: str = "m"
+    S3_USE_PATH_STYLE: bool = False
 
     @field_validator("ADMIN_IDS", mode="before")
     def split_admin_ids(cls, v):

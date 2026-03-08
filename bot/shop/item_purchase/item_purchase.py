@@ -79,9 +79,14 @@ async def confirm_purchase_clb(
         page = await page_repo.get_page(shop_id=shop_id, page_type=PAGE_INSUFFICIENT)
         caption = _caption(page, "Недостаточно средств, пополните баланс")
         await _edit_or_send(callback, text=caption, reply_markup=insufficient_funds_kb())
+        logger.info(
+            f"[ORDER] purchase_rejected_insufficient shop_id={shop_id} tg_id={tg_id} "
+            f"item_id={item_id} price={item.price} balance={user.balance}"
+        )
         return
 
-    await user_repo.decrease_balance(shop_id=shop_id, tg_id=tg_id, amount=item.price)
+    old_balance = user.balance
+    new_balance = await user_repo.decrease_balance(shop_id=shop_id, tg_id=tg_id, amount=item.price)
     await user_repo.increase_orders_amount(shop_id=shop_id, tg_id=tg_id, amount=1)
 
     order = await order_repo.create_order(shop_id=shop_id, title=item.title, price=item.price, tg_id=tg_id)
@@ -102,4 +107,7 @@ async def confirm_purchase_clb(
         text=caption
     )
 
-    logger.info(f"Purchase successful (shop_id={shop_id}, tg_id={tg_id}, item_id={item_id}, order_id={order.order_id})")
+    logger.info(
+        f"[ORDER] purchase_success shop_id={shop_id} tg_id={tg_id} item_id={item_id} "
+        f"order_id={order.order_id} price={item.price} balance_before={old_balance} balance_after={new_balance}"
+    )

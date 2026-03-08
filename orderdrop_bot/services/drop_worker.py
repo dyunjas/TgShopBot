@@ -45,6 +45,11 @@ async def _publish_batch(bot: Bot, session: AsyncSession, limit: int = 10):
         return
 
     for order in orders:
+        logger.info(
+            f"[ORDER] publish_candidate shop_id={order.shop_id} "
+            f"order_id={order.order_id} status={order.status} "
+            f"user_tg_id={getattr(order.user, 'tg_id', None)}"
+        )
         await _publish_one(bot, session, order)
 
 
@@ -78,4 +83,8 @@ async def _publish_one(bot: Bot, session: AsyncSession, order: ShopOrder):
     order.admin_card_msg_id = msg.message_id
 
     session.add(order)
-    logger.info(f"[DropOrders] published order {order.order_id} -> topic {topic_id}")
+    logger.info(
+        f"[ORDER] published shop_id={order.shop_id} order_id={order.order_id} "
+        f"topic_id={topic_id} group_chat_id={settings.ORDERS_GROUP_ID} "
+        f"admin_card_msg_id={msg.message_id}"
+    )

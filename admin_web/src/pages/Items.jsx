@@ -1,5 +1,8 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
+import CategoryDrilldownPicker from "../components/CategoryDrilldownPicker.jsx";
+import S3ImagePickerField from "../components/S3ImagePickerField.jsx";
+import ShopSelect from "../components/ShopSelect.jsx";
 
 export default function Items({ notify }) {
   const [shopId, setShopId] = useState("");
@@ -10,6 +13,7 @@ export default function Items({ notify }) {
   const [price, setPrice] = useState("0");
   const [desc, setDesc] = useState("");
   const [img, setImg] = useState("");
+  const [createCategoryId, setCreateCategoryId] = useState("");
 
   async function load() {
     if (!shopId) return;
@@ -29,14 +33,17 @@ export default function Items({ notify }) {
         method: "POST",
         body: {
           shop_id: Number(shopId),
-          category_id: Number(categoryId),
+          category_id: Number(createCategoryId),
           title,
           price: Number(price),
           description: desc || null,
-          img
-        }
+          img,
+        },
       });
-      setTitle(""); setPrice("0"); setDesc(""); setImg("");
+      setTitle("");
+      setPrice("0");
+      setDesc("");
+      setImg("");
       notify("Ок", "Товар создан");
       load();
     } catch (e) {
@@ -55,7 +62,13 @@ export default function Items({ notify }) {
     }
   }
 
-  useEffect(() => { load(); }, [shopId, categoryId]);
+  useEffect(() => {
+    load();
+  }, [shopId, categoryId]);
+
+  useEffect(() => {
+    setCreateCategoryId("");
+  }, [shopId]);
 
   return (
     <div className="grid cols2">
@@ -63,13 +76,10 @@ export default function Items({ notify }) {
         <h2>Товары</h2>
 
         <div className="row">
-          <div className="field">
-            <label>shop_id</label>
-            <input value={shopId} onChange={(e)=>setShopId(e.target.value.replace(/[^\d]/g,""))} placeholder="1" />
-          </div>
+          <ShopSelect value={shopId} onChange={setShopId} notify={notify} label="Магазин" />
           <div className="field">
             <label>category_id (фильтр)</label>
-            <input value={categoryId} onChange={(e)=>setCategoryId(e.target.value.replace(/[^\d]/g,""))} placeholder="10" />
+            <input value={categoryId} onChange={(e) => setCategoryId(e.target.value.replace(/[^\d]/g, ""))} placeholder="10" />
           </div>
         </div>
 
@@ -99,30 +109,44 @@ export default function Items({ notify }) {
       <div className="card">
         <h2>Создать товар</h2>
         <div className="form">
-          <div className="small">Нужны: shop_id + category_id.</div>
+          <div className="small">Нужны: shop_id + категория (через проваливание).</div>
 
           <div className="field">
             <label>title</label>
-            <input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="VPN 1 мес" />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="VPN 1 мес" />
           </div>
+
+          <CategoryDrilldownPicker
+            shopId={shopId}
+            value={createCategoryId}
+            onChange={setCreateCategoryId}
+            notify={notify}
+            title="Проваливание: выбор категории товара"
+          />
+
+          <S3ImagePickerField
+            shopId={shopId}
+            entity="items"
+            value={img}
+            onChange={setImg}
+            notify={notify}
+            label="img (S3 / url)"
+            placeholder="https://..."
+          />
 
           <div className="row">
             <div className="field">
               <label>price</label>
-              <input value={price} onChange={(e)=>setPrice(e.target.value.replace(/[^\d]/g,""))} />
-            </div>
-            <div className="field">
-              <label>img (telegram file_id / url)</label>
-              <input value={img} onChange={(e)=>setImg(e.target.value)} placeholder="AgACAg..." />
+              <input value={price} onChange={(e) => setPrice(e.target.value.replace(/[^\d]/g, ""))} />
             </div>
           </div>
 
           <div className="field">
             <label>description</label>
-            <textarea value={desc} onChange={(e)=>setDesc(e.target.value)} placeholder="Описание..." />
+            <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Описание..." />
           </div>
 
-          <button className="btn ok" onClick={create} disabled={!shopId || !categoryId || !title || !img}>
+          <button className="btn ok" onClick={create} disabled={!shopId || !createCategoryId || !title || !img}>
             Создать
           </button>
         </div>

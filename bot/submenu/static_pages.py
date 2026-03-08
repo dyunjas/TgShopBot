@@ -1,8 +1,9 @@
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InputMediaPhoto
+from aiogram.types import CallbackQuery
 
 from backend.repositories.shop_page_repository import ShopPageRepository
 from .keyboards import back_main_menu_kb
+from bot.utils.media_fallback import safe_edit_photo_or_text
 
 router = Router()
 
@@ -42,22 +43,13 @@ async def _render_page(
 
     message = callback.message
 
-    if image:
-        await message.edit_media(
-            media=InputMediaPhoto(
-                media=image,
-                caption=text,
-                parse_mode="HTML",
-            ),
-            reply_markup=back_main_menu_kb(),
-        )
-    else:
-
-        await message.edit_text(
-            text=text,
-            parse_mode="HTML",
-            reply_markup=back_main_menu_kb(),
-        )
+    await safe_edit_photo_or_text(
+        message=message,
+        image=image,
+        text=text,
+        parse_mode="HTML",
+        reply_markup=back_main_menu_kb(),
+    )
 
     await callback.answer()
 

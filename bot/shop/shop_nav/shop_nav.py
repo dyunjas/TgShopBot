@@ -1,10 +1,11 @@
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InputMediaPhoto
+from aiogram.types import CallbackQuery
 
 from backend.repositories.shop_repository import ShopRepository
 from backend.database.models import ShopCategory
 
 from .keyboards import build_shop_keyboard, build_item_kb
+from bot.utils.media_fallback import safe_edit_photo_or_text
 
 router = Router()
 
@@ -28,9 +29,14 @@ async def category_clb(
     kb = await build_shop_keyboard(shop_id=shop_id, shop_repo=shop_repo, parent_id=category.id)
 
     text = "Выберите категорию:" if category.parent_id is None else "Выберите товар:"
-    content = InputMediaPhoto(media=category.img, caption=text)
-
-    await callback.message.edit_media(media=content, reply_markup=kb.as_markup())
+    media_url = (category.img or "").strip()
+    await safe_edit_photo_or_text(
+        message=callback.message,
+        image=media_url,
+        text=text,
+        reply_markup=kb.as_markup(),
+        parse_mode=None,
+    )
     await callback.answer()
 
 
@@ -53,10 +59,14 @@ async def item_clb(
         f"<b>Описание:</b> {item.description or '-'}"
     )
 
-    content = InputMediaPhoto(media=item.img, caption=text, parse_mode="HTML")
+    media_url = (item.img or "").strip()
+    reply_markup = build_item_kb(item_id=item.id, category_id=item.category_id)
 
-    await callback.message.edit_media(
-        media=content,
-        reply_markup=build_item_kb(item_id=item.id, category_id=item.category_id),
+    await safe_edit_photo_or_text(
+        message=callback.message,
+        image=media_url,
+        text=text,
+        parse_mode="HTML",
+        reply_markup=reply_markup,
     )
     await callback.answer()

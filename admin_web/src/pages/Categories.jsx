@@ -1,5 +1,8 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
+import CategoryDrilldownPicker from "../components/CategoryDrilldownPicker.jsx";
+import S3ImagePickerField from "../components/S3ImagePickerField.jsx";
+import ShopSelect from "../components/ShopSelect.jsx";
 
 export default function Categories({ notify }) {
   const [shopId, setShopId] = useState("");
@@ -8,6 +11,7 @@ export default function Categories({ notify }) {
 
   const [title, setTitle] = useState("");
   const [img, setImg] = useState("");
+  const [createParentId, setCreateParentId] = useState("");
 
   async function load() {
     if (!shopId) return;
@@ -25,9 +29,16 @@ export default function Categories({ notify }) {
     try {
       await api("/api/catalog/categories", {
         method: "POST",
-        body: { shop_id: Number(shopId), title, img, parent_id: parentId ? Number(parentId) : null }
+        body: {
+          shop_id: Number(shopId),
+          title,
+          img,
+          parent_id: createParentId ? Number(createParentId) : null,
+        },
       });
-      setTitle(""); setImg("");
+      setTitle("");
+      setImg("");
+      setCreateParentId("");
       notify("Ок", "Категория создана");
       load();
     } catch (e) {
@@ -46,7 +57,13 @@ export default function Categories({ notify }) {
     }
   }
 
-  useEffect(() => { load(); }, [shopId, parentId]);
+  useEffect(() => {
+    load();
+  }, [shopId, parentId]);
+
+  useEffect(() => {
+    setCreateParentId("");
+  }, [shopId]);
 
   return (
     <div className="grid cols2">
@@ -54,13 +71,10 @@ export default function Categories({ notify }) {
         <h2>Категории</h2>
 
         <div className="row">
+          <ShopSelect value={shopId} onChange={setShopId} notify={notify} label="Магазин" />
           <div className="field">
-            <label>shop_id</label>
-            <input value={shopId} onChange={(e) => setShopId(e.target.value.replace(/[^\d]/g,""))} placeholder="1" />
-          </div>
-          <div className="field">
-            <label>parent_id (опционально)</label>
-            <input value={parentId} onChange={(e) => setParentId(e.target.value.replace(/[^\d]/g,""))} placeholder="" />
+            <label>parent_id (фильтр)</label>
+            <input value={parentId} onChange={(e) => setParentId(e.target.value.replace(/[^\d]/g, ""))} placeholder="" />
           </div>
         </div>
 
@@ -89,15 +103,33 @@ export default function Categories({ notify }) {
       <div className="card">
         <h2>Создать категорию</h2>
         <div className="form">
-          <div className="small">Нужны: shop_id, title, img (file_id/URL), parent_id по желанию.</div>
+          <div className="small">Нужны: shop_id, title, img. Родителя выбирайте через проваливание.</div>
+
           <div className="field">
             <label>title</label>
-            <input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="VPN" />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="VPN" />
           </div>
-          <div className="field">
-            <label>img (telegram file_id / url)</label>
-            <input value={img} onChange={(e)=>setImg(e.target.value)} placeholder="AgACAg..." />
-          </div>
+
+          <CategoryDrilldownPicker
+            shopId={shopId}
+            value={createParentId}
+            onChange={setCreateParentId}
+            notify={notify}
+            title="Проваливание: выбор родительской категории"
+            rootLabel="Корень каталога"
+            allowRoot
+          />
+
+          <S3ImagePickerField
+            shopId={shopId}
+            entity="categories"
+            value={img}
+            onChange={setImg}
+            notify={notify}
+            label="img (S3 / url)"
+            placeholder="https://..."
+          />
+
           <button className="btn ok" onClick={create} disabled={!shopId || !title || !img}>Создать</button>
         </div>
       </div>

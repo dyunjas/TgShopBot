@@ -1,9 +1,10 @@
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InputMediaPhoto
+from aiogram.types import CallbackQuery
 
 from backend.repositories.transaction_repository import ShopTransactionRepository
 from backend.repositories.shop_page_repository import ShopPageRepository
 from .keyboards import back_main_menu_kb, build_transactions_kb, back_to_transactions_bt
+from bot.utils.media_fallback import safe_edit_photo_or_text
 
 router = Router()
 
@@ -57,26 +58,26 @@ async def transactions_clb(
 
     if not txs:
         caption = _caption(page, "У вас пока нет транзакций")
-        if image:
-            await callback.message.edit_media(
-                media=InputMediaPhoto(media=image, caption=caption, parse_mode="HTML"),
-                reply_markup=back_main_menu_kb(),
-            )
-        else:
-            await callback.message.edit_text(caption, parse_mode="HTML", reply_markup=back_main_menu_kb())
+        await safe_edit_photo_or_text(
+            message=callback.message,
+            image=image,
+            text=caption,
+            parse_mode="HTML",
+            reply_markup=back_main_menu_kb(),
+        )
         await callback.answer()
         return
 
     caption = _caption(page, "Ваши транзакции:")
     kb = build_transactions_kb(txs, page=0).as_markup()
 
-    if image:
-        await callback.message.edit_media(
-            media=InputMediaPhoto(media=image, caption=caption, parse_mode="HTML"),
-            reply_markup=kb,
-        )
-    else:
-        await callback.message.edit_text(caption, parse_mode="HTML", reply_markup=kb)
+    await safe_edit_photo_or_text(
+        message=callback.message,
+        image=image,
+        text=caption,
+        parse_mode="HTML",
+        reply_markup=kb,
+    )
 
     await callback.answer()
 
@@ -97,26 +98,26 @@ async def transactions_page_clb(
 
     if not txs:
         caption = _caption(page, "У вас пока нет транзакций")
-        if image:
-            await callback.message.edit_media(
-                media=InputMediaPhoto(media=image, caption=caption, parse_mode="HTML"),
-                reply_markup=back_main_menu_kb(),
-            )
-        else:
-            await callback.message.edit_text(caption, parse_mode="HTML", reply_markup=back_main_menu_kb())
+        await safe_edit_photo_or_text(
+            message=callback.message,
+            image=image,
+            text=caption,
+            parse_mode="HTML",
+            reply_markup=back_main_menu_kb(),
+        )
         await callback.answer()
         return
 
     caption = _caption(page, "Ваши транзакции:")
     kb = build_transactions_kb(txs, page=page_num).as_markup()
 
-    if image:
-        await callback.message.edit_media(
-            media=InputMediaPhoto(media=image, caption=caption, parse_mode="HTML"),
-            reply_markup=kb,
-        )
-    else:
-        await callback.message.edit_text(caption, parse_mode="HTML", reply_markup=kb)
+    await safe_edit_photo_or_text(
+        message=callback.message,
+        image=image,
+        text=caption,
+        parse_mode="HTML",
+        reply_markup=kb,
+    )
 
     await callback.answer()
 
@@ -165,12 +166,12 @@ async def transaction_detail_clb(
     text = _caption(page, fallback, values=values)
     image = page.image if page else None
 
-    if image:
-        await callback.message.edit_media(
-            media=InputMediaPhoto(media=image, caption=text, parse_mode="HTML"),
-            reply_markup=back_to_transactions_bt(page_num),
-        )
-    else:
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=back_to_transactions_bt(page_num))
+    await safe_edit_photo_or_text(
+        message=callback.message,
+        image=image,
+        text=text,
+        parse_mode="HTML",
+        reply_markup=back_to_transactions_bt(page_num),
+    )
 
     await callback.answer()
